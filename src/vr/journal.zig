@@ -18,12 +18,12 @@ pub const Journal = struct {
     pub const Read = struct {
         self: *Journal,
         completion: Storage.Read,
-        callback: fn (self: *Replica, prepare: ?*Message, destination_replica: ?u16) void,
+        callback: fn (self: *Replica, prepare: ?*Message, destination_replica: ?u8) void,
 
         message: *Message,
         op: u64,
         checksum: u128,
-        destination_replica: ?u16,
+        destination_replica: ?u8,
     };
 
     pub const Write = struct {
@@ -84,7 +84,7 @@ pub const Journal = struct {
 
     allocator: *Allocator,
     storage: *Storage,
-    replica: u16,
+    replica: u8,
     size: u64,
     size_headers: u64,
     size_circular_buffer: u64,
@@ -120,7 +120,7 @@ pub const Journal = struct {
     pub fn init(
         allocator: *Allocator,
         storage: *Storage,
-        replica: u16,
+        replica: u8,
         size: u64,
         headers_count: u32,
         init_prepare: *Header,
@@ -190,6 +190,8 @@ pub const Journal = struct {
         assert(self.dirty.bits.len == self.headers.len);
         assert(self.faulty.bits.len == self.headers.len);
 
+        assert(init_prepare.valid_checksum());
+        assert(init_prepare.invalid() == null);
         self.headers[0] = init_prepare.*;
         self.assert_headers_reserved_from(init_prepare.op + 1);
 
@@ -365,7 +367,7 @@ pub const Journal = struct {
                     // A exists and B exists:
                     if (range) |*r| {
                         assert(b.op == r.op_min);
-                        if (a.checksum == b.nonce) {
+                        if (a.checksum == b.parent) {
                             // A is connected to B, but B is disconnected, add A to range:
                             assert(a.view <= b.view);
                             r.op_min = a.op;
@@ -379,7 +381,7 @@ pub const Journal = struct {
                             // Op numbers in the same view must be connected.
                             unreachable;
                         }
-                    } else if (a.checksum == b.nonce) {
+                    } else if (a.checksum == b.parent) {
                         // A is connected to B, and B is connected or B is op_max.
                         assert(a.view <= b.view);
                     } else if (a.view < b.view) {
@@ -431,10 +433,10 @@ pub const Journal = struct {
 
     pub fn read_prepare(
         self: *Journal,
-        callback: fn (replica: *Replica, prepare: ?*Message, destination_replica: ?u16) void,
+        callback: fn (replica: *Replica, prepare: ?*Message, destination_replica: ?u8) void,
         op: u64,
         checksum: u128,
-        destination_replica: ?u16,
+        destination_replica: ?u8,
     ) void {
         const replica = @fieldParentPtr(Replica, "journal", self);
         if (op > replica.op) {
@@ -856,10 +858,8 @@ pub const Journal = struct {
         }
         if (self.previous_entry(header)) |previous| {
             assert(previous.command == .prepare);
-            if (previous.checksum != header.nonce) {
-                log.debug("{}: journal: write_prepare_header_once: no hash chain", .{
-                    self.replica,
-                });
+            if (previous.checksum != header.parent) {
+                log.debug("{}: journal: write_headers_once: no hash chain", .{self.replica});
                 return false;
             }
             // TODO Add is_dirty(header)
@@ -871,9 +871,7 @@ pub const Journal = struct {
                 return false;
             }
         } else {
-            log.debug("{}: journal: write_prepare_header_once: no previous entry", .{
-                self.replica,
-            });
+            log.debug("{}: journal: write_prepare_header_once: no previous entry", .{self.replica});
             return false;
         }
         return true;

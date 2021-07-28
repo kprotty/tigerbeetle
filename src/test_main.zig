@@ -6,7 +6,7 @@ const MessageBus = @import("test_message_bus.zig").MessageBus;
 const vr = @import("vr.zig");
 const Replica = vr.Replica;
 const Journal = vr.Journal;
-const Storage = vr.Storage;
+const Storage = @import("storage.zig").Storage;
 const StateMachine = @import("state_machine.zig").StateMachine;
 
 const log = std.log.default;
@@ -19,7 +19,7 @@ pub fn run() !void {
     var allocator = &arena.allocator;
 
     const f = 1;
-    const cluster = 123456789;
+    const cluster = 0;
 
     var configuration: [3]*Replica = undefined;
     var message_bus = try MessageBus.init(allocator, &configuration);
@@ -31,7 +31,7 @@ pub fn run() !void {
         journal.* = try Journal.init(
             allocator,
             &storage[index],
-            @intCast(u16, index),
+            @intCast(u8, index),
             config.journal_size_max,
             config.journal_headers_max,
         );
@@ -52,9 +52,8 @@ pub fn run() !void {
         replica.* = try Replica.init(
             allocator,
             cluster,
-            &configuration,
-            @intCast(u16, index),
-            f,
+            @intCast(u8, configuration.len),
+            @intCast(u8, index),
             &journals[index],
             &message_bus,
             &state_machines[index],

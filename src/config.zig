@@ -2,10 +2,16 @@
 pub const deployment_environment = .development;
 
 /// The maximum log level in increasing order of verbosity (emergency=0, debug=7):
-pub const log_level = 6;
+pub const log_level = 7;
 
 /// The maximum number of replicas allowed in a cluster.
-pub const replicas_max = 15;
+pub const replicas_max = 6;
+
+/// The maximum number of clients allowed per cluster, where each client has a unique 128-bit ID.
+/// This impacts the amount of memory allocated at initialization by the server.
+/// This determines the size of the VR client table used to cache replies to clients by client ID.
+/// Each client has one entry in the VR client table to store the latest `message_size_max` reply.
+pub const clients_max = 32;
 
 /// The minimum number of nodes required to form quorums for leader election or replication:
 /// Majority quorums are only required across leader election and replication phases (not within).
@@ -17,10 +23,10 @@ pub const replicas_max = 15;
 pub const quorum_leader_election = -1;
 pub const quorum_replication = 2;
 
-/// The default server port to listen on if not specified in `--replica-addresses`:
+/// The default server port to listen on if not specified in `--addresses`:
 pub const port = 3001;
 
-/// The default network interface address to listen on if not specified in `--replica-addresses`:
+/// The default network interface address to listen on if not specified in `--addresses`:
 /// WARNING: Binding to all interfaces with "0.0.0.0" is dangerous and opens the server to anyone.
 /// Bind to the "127.0.0.1" loopback address to accept local connections as a safe default only.
 pub const address = "127.0.0.1";
@@ -66,24 +72,27 @@ pub const journal_headers_max = switch (deployment_environment) {
     else => 16384,
 };
 
-/// The maximum number of connections that can be accepted and held open by the server at any time:
-pub const connections_max = 32;
+/// The maximum number of connections that can be held open by the server at any time:
+pub const connections_max = replicas_max + clients_max;
 
 /// The maximum size of a message in bytes:
 /// This is also the limit of all inflight data across multiple pipelined requests per connection.
-/// We may have one request of up to 4 MiB inflight or 4 pipelined requests of up to 1 MiB inflight.
+/// We may have one request of up to 2 MiB inflight or 2 pipelined requests of up to 1 MiB inflight.
 /// This impacts sequential disk write throughput, the larger the buffer the better.
-/// 4 MiB is 32,768 transfers, and a reasonable choice for sequential disk write throughput.
+/// 2 MiB is 16,384 transfers, and a reasonable choice for sequential disk write throughput.
 /// However, this impacts bufferbloat and head-of-line blocking latency for pipelined requests.
-/// For a 1 Gbps NIC = 125 MiB/s throughput: 4 MiB / 125 * 1000ms = 32ms for the next request.
-/// This also impacts the amount of memory allocated at initialization by the server.
-pub const message_size_max = 4 * 1024 * 1024;
+/// For a 1 Gbps NIC = 125 MiB/s throughput: 2 MiB / 125 * 1000ms = 16ms for the next request.
+/// This impacts the amount of memory allocated at initialization by the server.
+pub const message_size_max = 2 * 1024 * 1024;
 
 /// The number of full-sized messages allocated at initialization by the message bus.
 pub const message_bus_messages_max = connections_max * 4;
 /// The number of header-sized messages allocated at initialization by the message bus.
 /// These are much smaller/cheaper and we can therefore have many of them.
 pub const message_bus_headers_max = connections_max * connection_send_queue_max;
+
+/// The maximum number of Viewstamped Replication prepare messages that can be inflight at a time.
+pub const pipelining_max = 32;
 
 /// The minimum and maximum amount of time in milliseconds to wait before initiating a connection.
 /// Exponential backoff and full jitter are applied within this range.
