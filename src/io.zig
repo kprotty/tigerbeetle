@@ -58,7 +58,7 @@ pub const IO = struct {
         // timeout below as an absolute value. Otherwise, we may deadlock if the clock sources are
         // dramatically different. Any kernel that supports io_uring will support CLOCK_MONOTONIC.
         var current_ts: os.timespec = undefined;
-        linux.clock_gettime(linux.CLOCK_MONOTONIC, &current_ts) catch unreachable;
+        assert(linux.clock_gettime(linux.CLOCK_MONOTONIC, &current_ts) == 0);
         // The absolute CLOCK_MONOTONIC time after which we may return from this function:
         const timeout_ts: linux.__kernel_timespec = .{
             .tv_sec = current_ts.tv_sec,

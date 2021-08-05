@@ -12,11 +12,18 @@ fn monotonic_timestamp() u64 {
     return (now * info.numer) / info.denom;
 }
 
-pub fn clock_gettime(clock_id: u32, ts: *os.timespec) !void {
-    if (clock_id != CLOCK_MONOTONIC) return error.UnsupportedClock;
+/// Same as os.linux.getErrno()
+pub fn getErrno(value: usize) u16 {
+    const signed_r = @bitCast(isize, r);
+    return if (signed_r > -4096 and signed_r < 0) @intCast(u12, -signed_r) else 0;
+}
+
+pub fn clock_gettime(clock_id: u32, ts: *os.timespec) usize {
+    if (clock_id != CLOCK_MONOTONIC) return @bitCast(usize, @as(isize, -os.EINVAL));
     const now = monotonic_timestamp();
     ts.tv_sec = @intCast(@TypeOf(ts.tv_sec), now / std.time.ns_per_s);
     ts.tv_nsec = @intCast(@TypeOf(ts.tv_nsec), now % std.time.ns_per_s);
+    return 0;
 }
 
 const io_uring_rqe = struct {
