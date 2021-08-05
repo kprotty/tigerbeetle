@@ -1,7 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const os = std.os;
-const linux = os.linux;
+
+const linux = if (std.Target.current.isDarwin()) @import("io_darwin.zig") else os.linux;
 const IO_Uring = linux.IO_Uring;
 const io_uring_cqe = linux.io_uring_cqe;
 const io_uring_sqe = linux.io_uring_sqe;
@@ -57,9 +58,9 @@ pub const IO = struct {
         // timeout below as an absolute value. Otherwise, we may deadlock if the clock sources are
         // dramatically different. Any kernel that supports io_uring will support CLOCK_MONOTONIC.
         var current_ts: os.timespec = undefined;
-        os.clock_gettime(os.CLOCK_MONOTONIC, &current_ts) catch unreachable;
+        linux.clock_gettime(linux.CLOCK_MONOTONIC, &current_ts) catch unreachable;
         // The absolute CLOCK_MONOTONIC time after which we may return from this function:
-        const timeout_ts: os.__kernel_timespec = .{
+        const timeout_ts: linux.__kernel_timespec = .{
             .tv_sec = current_ts.tv_sec,
             .tv_nsec = current_ts.tv_nsec + nanoseconds,
         };
@@ -72,7 +73,7 @@ pub const IO = struct {
                 break :blk self.ring.get_sqe() catch unreachable;
             };
             // Submit an absolute timeout that will be canceled if any other SQE completes first:
-            linux.io_uring_prep_timeout(timeout_sqe, &timeout_ts, 1, os.IORING_TIMEOUT_ABS);
+            linux.io_uring_prep_timeout(timeout_sqe, &timeout_ts, 1, linux.IORING_TIMEOUT_ABS);
             timeout_sqe.user_data = 0;
             timeouts += 1;
             // The amount of time this call will block is bounded by the timeout we just submitted:
@@ -494,7 +495,7 @@ pub const IO = struct {
             flags: u32,
         },
         timeout: struct {
-            timespec: os.__kernel_timespec,
+            timespec: linux.__kernel_timespec,
         },
         write: struct {
             fd: os.fd_t,
