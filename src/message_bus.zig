@@ -153,7 +153,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
         fn init_tcp(address: std.net.Address) !os.socket_t {
             const fd = try os.socket(
                 address.any.family,
-                os.SOCK_STREAM | os.SOCK_CLOEXEC | (if (is_darwin) os.SOCK_NONBLOCK else 0),
+                os.SOCK_STREAM | os.SOCK_CLOEXEC,
                 os.IPPROTO_TCP,
             );
             errdefer os.close(fd);
@@ -328,6 +328,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                 on_accept,
                 &bus.process.accept_completion,
                 bus.process.accept_fd,
+                os.SOCK_CLOEXEC
             );
         }
 
@@ -975,6 +976,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                     &connection.recv_completion,
                     connection.fd,
                     connection.recv_message.?.buffer[connection.recv_progress..config.message_size_max],
+                    if (is_darwin) 0 else os.MSG_NOSIGNAL,
                 );
             }
 
@@ -1017,6 +1019,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                     &connection.send_completion,
                     connection.fd,
                     message.buffer[connection.send_progress..message.header.size],
+                    if (is_darwin) 0 else os.MSG_NOSIGNAL,
                 );
             }
 
