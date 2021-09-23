@@ -980,7 +980,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                 defer connection.fd = -1;
                 // It's OK to use the send completion here as we know that no send
                 // operation is currently in progress.
-                bus.io.close(*Self, bus, on_close, &connection.send_completion, connection.fd);
+                bus.io.close(*Self, bus, on_close, &connection.send_completion, connection.fd, true);
             }
 
             fn on_close(bus: *Self, completion: *IO.Completion, result: IO.CloseError!void) void {
