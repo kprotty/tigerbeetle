@@ -1,7 +1,10 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const is_darwin = std.Target.current.isDarwin();
 const config = @import("./config.zig");
+
+const target = std.builtin.target;
+const is_darwin = target.isDarwin();
+const is_windows = target.os.tag == .windows;
 
 pub const Time = struct {
     const Self = @This();
@@ -18,7 +21,31 @@ pub const Time = struct {
     /// system administrator manually changes the clock.
     pub fn monotonic(self: *Self) u64 {
         const m = blk: {
-            // Uses mach_continuous_time() instead of mach_absolute_time() as it counts while suspended.
+            if (is_windows) {
+                // Use QPC since it ticks while the system is suspended.
+                // No need to cache QPF on modern (Win7+) systems since it just
+                // reads from KUSER_SHARED_DATA (vdso memory mapped to the process).
+                const counter = std.os.windows.QueryPerformanceCounter();
+                const frequency = std.os.windows.QueryPerformanceFrequency();
+
+                // Specialize for a common frequency value which is common for modern systems.
+                // This avoids the division heavy computations below.
+                // 10Mhz equates to a precision of 100ns which is windows interrupt time precision.
+                // https://github.com/microsoft/STL/blob/6d2f8b0ed88ea6cba26cc2151f47f678442c1663/stl/inc/chrono#L694-L701
+                const common_freq = 10_000_000;
+                if (frequency == common_freq) {
+                    return counter * (std.time.ns_per_s / common_freq);
+                }
+
+                // Computes (counter * std.time.ns_per_s) / frequency without overflowing 
+                // on the multiplication as long as both counter and (std.time.ns_per_s * frequency)
+                // fit in i64 which is the case for QPC/QPF readings. 
+                const part = ((counter % frequency) * std.time.ns_per_s) / frequency;
+                const whole = (counter / frequency) * std.time.ns_per_s;
+                return whole + part; 
+            }
+
+            // Uses mach_continuous_time() instead of mach_absolute_time() as it ticks while suspended.
             // https://developer.apple.com/documentation/kernel/1646199-mach_continuous_time
             // https://opensource.apple.com/source/Libc/Libc-1158.1.2/gen/clock_gettime.c.auto.html
             if (is_darwin) {
@@ -53,6 +80,18 @@ pub const Time = struct {
     /// A timestamp to measure real (i.e. wall clock) time, meaningful across systems, and reboots.
     /// This clock is affected by discontinuous jumps in the system time.
     pub fn realtime(self: *Self) i64 {
+        if (is_windows) {
+            var ft: std.os.windows.FILETIME = undefined;
+            std.os.windows.kernel32.GetSystemTimeAsFileTime(&ft);
+            const ft64 = (@as(u64, ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+            
+            // FILETIME from the system is in units of 100ns since 1 January 1601.
+            // Make it relative to the unix epoch of 1 January 1970
+            // and scale it back up to nanoseconds.
+            const epoch_adj = std.time.epoch.windows * (std.time.ns_per_s / 100);
+            return (@bitCast(i64, ft64) + epoch_adj) * 100;
+        }
+
         // macos has supported clock_gettime() since 10.12:
         // https://opensource.apple.com/source/Libc/Libc-1158.1.2/gen/clock_gettime.3.auto.html
 
