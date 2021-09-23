@@ -339,6 +339,7 @@ pub const IO = struct {
         ) void,
         completion: *Completion,
         fd: os.fd_t,
+        is_socket: bool,
     ) void {
         self.submit(
             context,
@@ -347,6 +348,7 @@ pub const IO = struct {
             .close,
             .{
                 .fd = fd,
+                .is_socket = is_socket,
             },
             struct {
                 fn doOperation(op: anytype) CloseError!void {
