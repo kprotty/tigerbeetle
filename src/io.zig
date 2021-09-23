@@ -149,7 +149,7 @@ test "openat/close" {
             result: IO.OpenatError!os.fd_t,
         ) void {
             self.fd = result catch @panic("openat error");
-            self.io.close(*Context, self, close_callback, completion, self.fd);
+            self.io.close(*Context, self, close_callback, completion, self.fd, false);
         }
 
         fn close_callback(
