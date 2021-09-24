@@ -348,7 +348,6 @@ pub const IO = struct {
             .close,
             .{
                 .fd = fd,
-                .is_socket = is_socket,
             },
             struct {
                 fn doOperation(op: anytype) CloseError!void {
