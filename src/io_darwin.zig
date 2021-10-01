@@ -9,10 +9,9 @@ const buffer_limit = @import("io.zig").buffer_limit;
 pub const IO = struct {
     kq: os.fd_t,
     time: Time = .{},
-    io_inflight: usize = 0,
     timeouts: FIFO(Completion) = .{},
     completed: FIFO(Completion) = .{},
-    io_pending: FIFO(Completion) = .{},
+    io_pending: FIFO(Event) = .{},
 
     pub fn init(entries: u12, flags: u32) !IO {
         const kq = try os.kqueue();
@@ -87,8 +86,6 @@ pub const IO = struct {
                     const timeout_ns = next_timeout orelse @panic("kevent() blocking forever");
                     ts.tv_nsec = @intCast(@TypeOf(ts.tv_nsec), timeout_ns % std.time.ns_per_s);
                     ts.tv_sec = @intCast(@TypeOf(ts.tv_sec), timeout_ns / std.time.ns_per_s);
-                } else if (self.io_inflight == 0) {
-                    return;
                 }
             }
 
@@ -101,16 +98,14 @@ pub const IO = struct {
 
             // Mark the io events submitted only after kevent() successfully processed them
             self.io_pending.out = io_pending;
-            self.io_inflight += change_events;
             if (io_pending == null) {
                 self.io_pending.in = null;
             }
 
-            self.io_inflight -= new_events;
-            for (events[0..new_events]) |event| {
-                const completion = @intToPtr(*Completion, event.udata);
-                completion.next = null;
-                self.completed.push(completion);
+            for (events[0..new_events]) |e| {
+                const event = @intToPtr(*Event, e.udata);
+                if (event.writers.pop()) |completion| self.completed.push(completion);
+                if (event.readers.pop()) |completion| self.completed.push(completion);
             }
         }
 
@@ -121,31 +116,25 @@ pub const IO = struct {
         }
     }
 
-    fn flush_io(self: *IO, events: []os.Kevent, io_pending_top: *?*Completion) usize {
-        for (events) |*event, flushed| {
-            const completion = io_pending_top.* orelse return flushed;
-            io_pending_top.* = completion.next;
-
-            const event_info = switch (completion.operation) {
-                .accept => |op| [2]c_int{ op.socket, os.EVFILT_READ },
-                .connect => |op| [2]c_int{ op.socket, os.EVFILT_WRITE },
-                .read => |op| [2]c_int{ op.fd, os.EVFILT_READ },
-                .write => |op| [2]c_int{ op.fd, os.EVFILT_WRITE },
-                .recv => |op| [2]c_int{ op.socket, os.EVFILT_READ },
-                .send => |op| [2]c_int{ op.socket, os.EVFILT_WRITE },
-                else => @panic("invalid completion operation queued for io"),
-            };
-
-            event.* = .{
-                .ident = @intCast(u32, event_info[0]),
-                .filter = @intCast(i16, event_info[1]),
-                .flags = os.EV_ADD | os.EV_ENABLE | os.EV_ONESHOT,
+    fn flush_io(self: *IO, events: []os.Kevent, io_pending_top: *?*Event) usize {
+        var flushed: usize = 0;
+        while (flushed + 2 < events.len) {
+            const event = io_pending_top.* orelse break;
+            io_pending_top.* = event.next;
+            flushed += 2;
+            
+            events[flushed - 1] = .{
+                .ident = @intCast(u32, event.fd),
+                .filter = os.EVFILT_READ,
+                .flags = os.EV_ADD | os.EV_ENABLE | os.EV_CLEAR,
                 .fflags = 0,
                 .data = 0,
-                .udata = @ptrToInt(completion),
+                .udata = @ptrToInt(event),
             };
+            events[flushed - 2] = events[flushed - 1];
+            events[flushed - 2].filter = os.EVFILT_WRITE;
         }
-        return events.len;
+        return flushed;
     }
 
     fn flush_timeouts(self: *IO) ?u64 {
@@ -176,6 +165,14 @@ pub const IO = struct {
         return min_timeout;
     }
 
+    pub const Event = struct {
+        next: ?*Event = null,
+        fd: os.fd_t = -1,
+        registered: bool = false,
+        readers: FIFO(Completion) = .{},
+        writers: FIFO(Completion) = .{},
+    };
+
     /// This struct holds the data needed for a single IO operation
     pub const Completion = struct {
         next: ?*Completion,
@@ -187,6 +184,7 @@ pub const IO = struct {
     const Operation = union(enum) {
         accept: struct {
             socket: os.socket_t,
+            event: *Event,
             flags: u32,
         },
         close: struct {
@@ -195,6 +193,7 @@ pub const IO = struct {
         connect: struct {
             socket: os.socket_t,
             address: std.net.Address,
+            event: *Event,
             initiated: bool,
         },
         fsync: struct {
@@ -215,12 +214,14 @@ pub const IO = struct {
         },
         recv: struct {
             socket: os.socket_t,
+            event: *Event,
             buf: [*]u8,
             len: u32,
             flags: u32,
         },
         send: struct {
             socket: os.socket_t,
+            event: *Event,
             buf: [*]const u8,
             len: u32,
             flags: u32,
@@ -248,31 +249,46 @@ pub const IO = struct {
         const Context = @TypeOf(context);
         const onCompleteFn = struct {
             fn onComplete(io: *IO, _completion: *Completion) void {
-                // Perform the actual operaton
-                const op_data = &@field(_completion.operation, @tagName(operation_tag));
-                const result = OperationImpl.doOperation(op_data);
+                while (true) {
+                    // Perform the actual operaton
+                    const op_data = &@field(_completion.operation, @tagName(operation_tag));
+                    const result = OperationImpl.doOperation(op_data);
 
-                // Requeue onto io_pending if error.WouldBlock
-                switch (operation_tag) {
-                    .accept, .connect, .read, .write, .send, .recv => {
-                        _ = result catch |err| switch (err) {
-                            error.WouldBlock => {
-                                _completion.next = null;
-                                io.io_pending.push(_completion);
-                                return;
-                            },
-                            else => {},
-                        };
-                    },
-                    else => {},
+                    // Requeue onto io_pending if error.WouldBlock
+                    switch (operation_tag) {
+                        .accept, .connect, .send, .recv => {
+                            _ = result catch |err| switch (err) {
+                                error.WouldBlock => {
+                                    if (!op_data.event.registered) {
+                                        op_data.event.registered = true;
+                                        op_data.event.fd = op_data.socket;
+                                        op_data.event.next = null;
+                                        io.io_pending.push(op_data.event);
+                                    }
+
+                                    const queue = switch (operation_tag) {
+                                        .accept, .recv => &op_data.event.readers,
+                                        .connect, .send => &op_data.event.writers,
+                                        else => unreachable,
+                                    };
+
+                                    _completion.next = null;
+                                    queue.push(_completion);
+                                    return;
+                                },
+                                else => {},
+                            };
+                        },
+                        else => {},
+                    }
+
+                    // Complete the Completion
+                    return callback(
+                        @intToPtr(Context, @ptrToInt(_completion.context)),
+                        _completion,
+                        result,
+                    );
                 }
-
-                // Complete the Completion
-                return callback(
-                    @intToPtr(Context, @ptrToInt(_completion.context)),
-                    _completion,
-                    result,
-                );
             }
         }.onComplete;
 
@@ -302,6 +318,7 @@ pub const IO = struct {
         ) void,
         completion: *Completion,
         socket: os.socket_t,
+        event: *Event,
         flags: u32,
     ) void {
         self.submit(
@@ -311,6 +328,7 @@ pub const IO = struct {
             .accept,
             .{
                 .socket = socket,
+                .event = event,
                 .flags = flags,
             },
             struct {
@@ -351,6 +369,7 @@ pub const IO = struct {
             },
             struct {
                 fn doOperation(op: anytype) CloseError!void {
+                    // close() deregisters any *Event previously registered for the fd
                     return switch (os.errno(os.system.close(op.fd))) {
                         0 => {},
                         os.EBADF => error.FileDescriptorInvalid,
@@ -376,6 +395,7 @@ pub const IO = struct {
         ) void,
         completion: *Completion,
         socket: os.socket_t,
+        event: *Event,
         address: std.net.Address,
     ) void {
         self.submit(
@@ -385,6 +405,7 @@ pub const IO = struct {
             .connect,
             .{
                 .socket = socket,
+                .event = event,
                 .address = address,
                 .initiated = false,
             },
@@ -553,6 +574,7 @@ pub const IO = struct {
         ) void,
         completion: *Completion,
         socket: os.socket_t,
+        event: *Event,
         buffer: []u8,
         flags: u32,
     ) void {
@@ -563,6 +585,7 @@ pub const IO = struct {
             .recv,
             .{
                 .socket = socket,
+                .event = event,
                 .buf = buffer.ptr,
                 .len = @intCast(u32, buffer_limit(buffer.len)),
                 .flags = flags,
@@ -588,6 +611,7 @@ pub const IO = struct {
         ) void,
         completion: *Completion,
         socket: os.socket_t,
+        event: *Event,
         buffer: []const u8,
         flags: u32,
     ) void {
@@ -598,6 +622,7 @@ pub const IO = struct {
             .send,
             .{
                 .socket = socket,
+                .event = event,
                 .buf = buffer.ptr,
                 .len = @intCast(u32, buffer_limit(buffer.len)),
                 .flags = flags,

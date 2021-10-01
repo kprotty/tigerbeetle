@@ -40,6 +40,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                 /// The file descriptor for the process on which to accept connections.
                 accept_fd: os.socket_t,
                 accept_completion: IO.Completion = undefined,
+                io_event: IO.Event = .{},
                 /// The connection reserved for the currently in progress accept operation.
                 /// This is non-null exactly when an accept operation is submitted.
                 accept_connection: ?*Connection = null,
@@ -332,6 +333,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                 on_accept,
                 &bus.process.accept_completion,
                 bus.process.accept_fd,
+                &bus.process.io_event,
                 sock_flags,
             );
         }
@@ -419,6 +421,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
             /// for safety to ensure an error if the invalid value is ever used, instead of
             /// potentially performing an action on an active fd.
             fd: os.socket_t = -1,
+            io_event: IO.Event = .{},
 
             /// This completion is used for all recv operations.
             /// It is also used for the initial connect when establishing a replica connection.
@@ -518,6 +521,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                     // We use `recv_completion` for the connection `timeout()` and `connect()` calls
                     &connection.recv_completion,
                     connection.fd,
+                    &connection.io_event,
                     bus.configuration[connection.peer.replica],
                 );
             }
@@ -885,6 +889,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                     on_recv,
                     &connection.recv_completion,
                     connection.fd,
+                    &connection.io_event,
                     connection.recv_message.?.buffer[connection.recv_progress..config.message_size_max],
                     if (is_darwin) 0 else os.MSG_NOSIGNAL,
                 );
@@ -928,6 +933,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                     on_send,
                     &connection.send_completion,
                     connection.fd,
+                    &connection.io_event,
                     message.buffer[connection.send_progress..message.header.size],
                     if (is_darwin) 0 else os.MSG_NOSIGNAL,
                 );
