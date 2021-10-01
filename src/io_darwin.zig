@@ -257,8 +257,35 @@ pub const IO = struct {
                     .accept, .connect, .read, .write, .send, .recv => {
                         _ = result catch |err| switch (err) {
                             error.WouldBlock => {
+                                const fd = switch (operation_tag) {
+                                    .accept, .connect, .recv, .send => op_data.socket,
+                                    .read, .write => op_data.fd,
+                                    else => unreachable,
+                                };
+
+                                const filter = switch (operation_tag) {
+                                    .accept, .recv, .read => os.EVFILT_READ,
+                                    .connect, .send, .write => os.EVFILT_WRITE,
+                                    else => unreachable,
+                                };
+
                                 _completion.next = null;
-                                io.io_pending.push(_completion);
+                                var events = [_]os.Kevent{.{
+                                    .ident = @intCast(u32, fd),
+                                    .filter = @intCast(i16, filter),
+                                    .flags = os.EV_ADD | os.EV_ENABLE | os.EV_ONESHOT,
+                                    .fflags = 0,
+                                    .data = 0,
+                                    .udata = @ptrToInt(_completion),
+                                }};
+
+                                _ = os.kevent(
+                                    io.kq,
+                                    &events,
+                                    events[0..0],
+                                    null,
+                                ) catch @panic("failed to register io event");
+                                io.io_inflight += 1;
                                 return;
                             },
                             else => {},
