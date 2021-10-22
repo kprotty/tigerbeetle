@@ -21,6 +21,7 @@ test "IO data pipe" {
         const Context = @This();
         const Socket = struct {
             fd: os.socket_t = -1,
+            event: IO.Event = .{},
             completion: IO.Completion = undefined,
         };
         const Pipe = struct {
@@ -65,6 +66,7 @@ test "IO data pipe" {
                 on_accept, 
                 &self.server.completion, 
                 self.server.fd,
+                &self.server.event,
                 sock_flags,
             );
 
@@ -77,6 +79,7 @@ test "IO data pipe" {
                 on_connect,
                 &self.tx.socket.completion,
                 self.tx.socket.fd,
+                &self.tx.socket.event,
                 address,
             );
 
@@ -136,6 +139,7 @@ test "IO data pipe" {
                     on_send,
                     &self.tx.socket.completion,
                     self.tx.socket.fd,
+                    &self.tx.socket.event,
                     self.tx.buffer[self.tx.transferred..],
                     io_flags,
                 );
@@ -163,6 +167,7 @@ test "IO data pipe" {
                     on_recv,
                     &self.rx.socket.completion,
                     self.rx.socket.fd,
+                    &self.rx.socket.event,
                     self.rx.buffer[self.rx.transferred..],
                     io_flags,
                 );
@@ -205,6 +210,7 @@ test "IO data echo" {
         const Context = @This();
         const Socket = struct {
             fd: os.socket_t = -1,
+            event: IO.Event = .{},
             completion: IO.Completion = undefined,
         };
         const Pipe = struct {
@@ -259,6 +265,7 @@ test "IO data echo" {
                 on_accept, 
                 &self.server.completion, 
                 self.server.fd,
+                &self.server.event,
                 sock_flags,
             );
 
@@ -271,6 +278,7 @@ test "IO data echo" {
                 on_connect,
                 &self.tx.socket.completion,
                 self.tx.socket.fd,
+                &self.tx.socket.event,
                 address,
             );
 
@@ -378,6 +386,7 @@ test "IO data echo" {
                     on_transfer,
                     &pipe.socket.completion,
                     pipe.socket.fd,
+                    &pipe.socket.event,
                     pipe.buffer[pipe.transferred..],
                     io_flags,
                 );
