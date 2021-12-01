@@ -326,8 +326,8 @@ pub const CommitTransfersResult = packed struct {
 comptime {
     const target = std.Target.current;
 
-    if (target.os.tag != .linux and !target.isDarwin()) {
-        @compileError("linux or macos required for io");
+    if (target.os.tag != .linux and !target.isDarwin() and target.os.tag != .windows) {
+        @compileError("linux, windows or macos is required for io");
     }
 
     // We require little-endian architectures everywhere for efficient network deserialization:
