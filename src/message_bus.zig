@@ -151,7 +151,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
         pub fn deinit(bus: *Self) void {}
 
         fn init_tcp(address: std.net.Address) !os.socket_t {
-            const fd = try IO.openSocket(
+            const fd = try IO.open_socket(
                 address.any.family,
                 os.SOCK_STREAM,
                 os.IPPROTO_TCP,
@@ -448,7 +448,7 @@ fn MessageBusImpl(comptime process_type: ProcessType) type {
                 // The first replica's network address family determines the
                 // family for all other replicas:
                 const family = bus.configuration[0].any.family;
-                connection.fd = IO.openSocket(family, os.SOCK_STREAM, os.IPPROTO_TCP) catch return;
+                connection.fd = IO.open_socket(family, os.SOCK_STREAM, os.IPPROTO_TCP) catch return;
                 connection.peer = .{ .replica = replica };
                 connection.state = .connecting;
                 bus.connections_used += 1;
