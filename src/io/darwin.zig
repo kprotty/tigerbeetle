@@ -242,7 +242,7 @@ pub const IO = struct {
             fn onComplete(io: *IO, _completion: *Completion) void {
                 // Perform the actual operaton
                 const op_data = &@field(_completion.operation, @tagName(operation_tag));
-                const result = OperationImpl.doOperation(op_data);
+                const result = OperationImpl.do_operation(op_data);
 
                 // Requeue onto io_pending if error.WouldBlock
                 switch (operation_tag) {
@@ -304,7 +304,7 @@ pub const IO = struct {
                 .socket = socket,
             },
             struct {
-                fn doOperation(op: anytype) AcceptError!os.socket_t {
+                fn do_operation(op: anytype) AcceptError!os.socket_t {
                     const fd = try os.accept(
                         op.socket,
                         null,
@@ -362,7 +362,7 @@ pub const IO = struct {
                 .fd = fd,
             },
             struct {
-                fn doOperation(op: anytype) CloseError!void {
+                fn do_operation(op: anytype) CloseError!void {
                     return switch (os.errno(os.system.close(op.fd))) {
                         0 => {},
                         os.EBADF => error.FileDescriptorInvalid,
@@ -401,7 +401,7 @@ pub const IO = struct {
                 .initiated = false,
             },
             struct {
-                fn doOperation(op: anytype) ConnectError!void {
+                fn do_operation(op: anytype) ConnectError!void {
                     // Don't call connect after being rescheduled by io_pending as it gives EISCONN.
                     // Instead, check the socket error to see if has been connected successfully.
                     const result = switch (op.initiated) {
@@ -439,7 +439,7 @@ pub const IO = struct {
                 .fd = fd,
             },
             struct {
-                fn doOperation(op: anytype) FsyncError!void {
+                fn do_operation(op: anytype) FsyncError!void {
                     _ = os.fcntl(op.fd, os.F_FULLFSYNC, 1) catch return os.fsync(op.fd);
                 }
             },
@@ -483,7 +483,7 @@ pub const IO = struct {
                 .offset = offset,
             },
             struct {
-                fn doOperation(op: anytype) ReadError!usize {
+                fn do_operation(op: anytype) ReadError!usize {
                     while (true) {
                         const rc = os.system.pread(
                             op.fd,
@@ -540,7 +540,7 @@ pub const IO = struct {
                 .len = @intCast(u32, buffer_limit(buffer.len)),
             },
             struct {
-                fn doOperation(op: anytype) RecvError!usize {
+                fn do_operation(op: anytype) RecvError!usize {
                     return os.recv(op.socket, op.buf[0..op.len], 0);
                 }
             },
@@ -573,7 +573,7 @@ pub const IO = struct {
                 .len = @intCast(u32, buffer_limit(buffer.len)),
             },
             struct {
-                fn doOperation(op: anytype) SendError!usize {
+                fn do_operation(op: anytype) SendError!usize {
                     return os.send(op.socket, op.buf[0..op.len], 0);
                 }
             },
@@ -603,7 +603,7 @@ pub const IO = struct {
                 .expires = self.time.monotonic() + nanoseconds,
             },
             struct {
-                fn doOperation(_: anytype) TimeoutError!void {
+                fn do_operation(_: anytype) TimeoutError!void {
                     return; // timeouts don't have errors for now
                 }
             },
@@ -638,7 +638,7 @@ pub const IO = struct {
                 .offset = offset,
             },
             struct {
-                fn doOperation(op: anytype) WriteError!usize {
+                fn do_operation(op: anytype) WriteError!usize {
                     return os.pwrite(op.fd, op.buf[0..op.len], op.offset);
                 }
             },
