@@ -203,9 +203,6 @@ pub const IO = struct {
                         op.address.getOsSockLen(),
                     );
                 },
-                .fsync => |op| {
-                    linux.io_uring_prep_fsync(sqe, op.fd, 0);
-                },
                 .read => |op| {
                     linux.io_uring_prep_read(
                         sqe,
@@ -294,22 +291,6 @@ pub const IO = struct {
                         os.EPERM => error.PermissionDenied,
                         os.EPROTOTYPE => error.ProtocolNotSupported,
                         os.ETIMEDOUT => error.ConnectionTimedOut,
-                        else => |errno| os.unexpectedErrno(@intCast(usize, errno)),
-                    } else assert(completion.result == 0);
-                    completion.callback(completion.context, completion, &result);
-                },
-                .fsync => {
-                    const result = if (completion.result < 0) switch (-completion.result) {
-                        os.EINTR => {
-                            completion.io.enqueue(completion);
-                            return;
-                        },
-                        os.EBADF => error.FileDescriptorInvalid,
-                        os.EDQUOT => error.DiskQuota,
-                        os.EINVAL => error.ArgumentsInvalid,
-                        os.EIO => error.InputOutput,
-                        os.ENOSPC => error.NoSpaceLeft,
-                        os.EROFS => error.ReadOnlyFileSystem,
                         else => |errno| os.unexpectedErrno(@intCast(usize, errno)),
                     } else assert(completion.result == 0);
                     completion.callback(completion.context, completion, &result);
@@ -435,9 +416,6 @@ pub const IO = struct {
         connect: struct {
             socket: os.socket_t,
             address: std.net.Address,
-        },
-        fsync: struct {
-            fd: os.fd_t,
         },
         read: struct {
             fd: os.fd_t,
@@ -596,48 +574,6 @@ pub const IO = struct {
                 .connect = .{
                     .socket = socket,
                     .address = address,
-                },
-            },
-        };
-        self.enqueue(completion);
-    }
-
-    pub const FsyncError = error{
-        FileDescriptorInvalid,
-        DiskQuota,
-        ArgumentsInvalid,
-        InputOutput,
-        NoSpaceLeft,
-        ReadOnlyFileSystem,
-    } || os.UnexpectedError;
-
-    pub fn fsync(
-        self: *IO,
-        comptime Context: type,
-        context: Context,
-        comptime callback: fn (
-            context: Context,
-            completion: *Completion,
-            result: FsyncError!void,
-        ) void,
-        completion: *Completion,
-        fd: os.fd_t,
-    ) void {
-        completion.* = .{
-            .io = self,
-            .context = context,
-            .callback = struct {
-                fn wrapper(ctx: ?*c_void, comp: *Completion, res: *const c_void) void {
-                    callback(
-                        @intToPtr(Context, @ptrToInt(ctx)),
-                        comp,
-                        @intToPtr(*const FsyncError!void, @ptrToInt(res)).*,
-                    );
-                }
-            }.wrapper,
-            .operation = .{
-                .fsync = .{
-                    .fd = fd,
                 },
             },
         };
