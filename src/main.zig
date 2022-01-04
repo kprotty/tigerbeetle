@@ -20,12 +20,15 @@ const vsr = @import("vsr.zig");
 const Replica = vsr.Replica(StateMachine, MessageBus, Storage, Time);
 
 pub fn main() !void {
+    var io = try IO.init(128, 0);
+    defer io.deinit();
+
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const arena = &arena_allocator.allocator;
 
     switch (cli.parse_args(arena)) {
-        .init => |args| try init(arena, args.cluster, args.replica, args.dir_fd),
-        .start => |args| try start(arena, args.cluster, args.replica, args.addresses, args.dir_fd),
+        .init => |args| try init(&io, arena, args.cluster, args.replica, args.dir_fd),
+        .start => |args| try start(&io, arena, args.cluster, args.replica, args.addresses, args.dir_fd),
     }
 }
 
@@ -34,7 +37,7 @@ const filename_fmt = "cluster_{d:0>10}_replica_{d:0>3}.tigerbeetle";
 const filename_len = fmt.count(filename_fmt, .{ 0, 0 });
 
 /// Create a .tigerbeetle data file for the given args and exit
-fn init(arena: *mem.Allocator, cluster: u32, replica: u8, dir_fd: os.fd_t) !void {
+fn init(io: *IO, arena: *mem.Allocator, cluster: u32, replica: u8, dir_fd: os.fd_t) !void {
     // Add 1 for the terminating null byte
     var buffer: [filename_len + 1]u8 = undefined;
     const filename = fmt.bufPrintZ(&buffer, filename_fmt, .{ cluster, replica }) catch unreachable;
@@ -42,6 +45,7 @@ fn init(arena: *mem.Allocator, cluster: u32, replica: u8, dir_fd: os.fd_t) !void
 
     // TODO Expose data file size on the CLI.
     _ = try Storage.open(
+        io,
         dir_fd,
         filename,
         config.journal_size_max, // TODO Double-check that we have space for redundant headers.
@@ -53,6 +57,7 @@ fn init(arena: *mem.Allocator, cluster: u32, replica: u8, dir_fd: os.fd_t) !void
 
 /// Run as a replica server defined by the given args
 fn start(
+    io: *IO,
     arena: *mem.Allocator,
     cluster: u32,
     replica_index: u8,
@@ -68,25 +73,26 @@ fn start(
 
     // TODO Expose data file size on the CLI.
     const storage_fd = try Storage.open(
+        io,
         dir_fd,
         filename,
         config.journal_size_max, // TODO Double-check that we have space for redundant headers.
         false,
     );
-    var io = try IO.init(128, 0);
+    
     var state_machine = try StateMachine.init(
         arena,
         config.accounts_max,
         config.transfers_max,
         config.commits_max,
     );
-    var storage = try Storage.init(config.journal_size_max, storage_fd, &io);
+    var storage = try Storage.init(config.journal_size_max, storage_fd, io);
     var message_bus = try MessageBus.init(
         arena,
         cluster,
         addresses,
         replica_index,
-        &io,
+        io,
     );
     var time: Time = .{};
     var replica = try Replica.init(
