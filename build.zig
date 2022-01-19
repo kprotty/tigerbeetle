@@ -43,6 +43,14 @@ pub fn build(b: *std.build.Builder) void {
         const test_step = b.step("test", "Run the unit tests");
         test_step.dependOn(&unit_tests.step);
     }
+
+    {
+        const tg_client = b.version(0, 1, 0);
+        const tg_client = b.addSharedLibrary("tg_client", "clients/client.zig", tg_version);
+        tg_client.setMainPkgPath(".");
+        tg_client.setTarget(target);
+        tg_client.setBuildMode(mode);
+    }
 }
 
 // A patched version of std.build.Builder.standardTargetOptions() to backport the fix
