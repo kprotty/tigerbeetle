@@ -1,14 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Atomic = std.atomic.Atomic;
-
-const builtin = @import("builtin");
-const allocator = if (builtin.link_libc)
-    std.heap.c_allocator
-else if (builtin.os.tag == .windows)
-    (struct { var gpa = std.heap.HeapAllocator.init(); }).gpa.allocator()
-else
-    (struct { var gpa = std.heap.GeneralPurposeAllocator(.{}){}; }).gpa.allocator();
     
 const tb = @import("src/tigerbeetle.zig");
 const Account = tb.Account;
@@ -34,40 +26,74 @@ const Client = vsr.Client(StateMachine, MessageBus);
 const config = @import("src/config.zig");
 const log = std.log.scoped(.tg_client);
 
-pub const Context = struct {
-    io: IO,
-    client: Client,
-    client_id: u128,
-    message_bus: MessageBus,
-    thread: std.Thread,
-    allocator: std.mem.Allocator,
-
-    pub fn init(
-        allocator: std.mem.Allocator,
-        client_id: u128,
-        addresses: []const u8,
-    ) !*Context {
-        const addrs = vsr.parsre_addresses(allocator, addresses) catch |err| {
-            log.err("Failed to parse addresses ({})", .{err});
-            return err;
-        }
-    }
-
-    pub fn deinit(self: *Context) void {
-
-    }
-
-    fn run(self: *Context) void {
-        self.run_context() catch |err| {
-            log.err(
-                "tigerbeetle client (id={}) shutdown unexpectedly with {}",
-                .{ self.client_id, err },
-            );
-        };
-    }
-
-    fn run_context(self: *Context) !void {
-
-    }
+pub const tb_state_t = enum(c_int) {
+    running = 0,
+    waiting = 1,
+    notified = 2,
 };
 
+pub const tb_packet_t = extern struct {
+    next: ?*tb_packet_t,
+    user_data: usize,
+    data: extern union {
+        request: extern union {
+            create_account: Account,
+            lookup_account: u128,
+            create_transfer: Transfer,
+            commit_transfer: Commit,
+        },
+        response: extern union {
+            create_account: EventResult,
+            create_transfer: EventResult,
+            lookup_account: Account,
+            commit_transfer: EventResult,
+        },
+    },
+};
+
+pub const tb_queue_t = extern struct {
+    state: Atomic(tb_state_t),
+    ready: Atomic(?*tb_packet_t),
+};
+
+pub const tb_client_t = extern struct {
+    sq: tb_queue_t,
+    cq: tb_queue_t,
+};
+
+pub const tb_create_result_t = enum(c_int) {
+
+};
+
+pub export fn tb_client_create(
+    // OUT var to allocated client (which is field of Context)
+    client: **tb_client_t,
+    // OUT var to stack of allocated packets for submission/completion
+    packets: **tb_packet_t,
+    // maximum number of packets to allocate, OUT var with num actually allocated
+    max_packets: *u32,
+    // cluster id of the replica
+    cluster_id: u32,
+    // addresses of the replica to connect to
+    addresses: [*c]const u8,
+    // context passed into on_cq_ready
+    on_cq_ready_ctx: usize,
+    // called when completion queue state is notified after waiting
+    on_cq_ready: fn (*tb_client_t, usize) callconv(.C) void,
+) tb_create_result_t {
+    // alloc max_packet requests + init Context + spawn context thread
+}
+
+pub export fn tb_client_destroy(client: *tb_client_t) void {
+    // shutdown Context thread + dealloc it + dealloc requests
+}
+
+pub export fn tb_client_notify(client: *tb_client_t) void {
+    // notify Context.io or something
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+const Context = struct {
+    client: tb_client_t,
+};
