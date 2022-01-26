@@ -7,9 +7,14 @@ const log = std.log.scoped(.io);
 const config = @import("../config.zig");
 const FIFO = @import("../fifo.zig").FIFO;
 const Time = @import("../time.zig").Time;
-const buffer_limit = @import("../io.zig").buffer_limit;
+
+const _io = @import("../io.zig");
+const PollMode = _io.PollMode; 
+const buffer_limit = _io.buffer_limit;
 
 pub const IO = struct {
+    pub usingnamespace _io.Extensions;
+
     kq: os.fd_t,
     time: Time = .{},
     io_inflight: usize = 0,
@@ -29,44 +34,7 @@ pub const IO = struct {
         self.kq = -1;
     }
 
-    /// Pass all queued submissions to the kernel and peek for completions.
-    pub fn tick(self: *IO) !void {
-        return self.flush(false);
-    }
-
-    /// Pass all queued submissions to the kernel and run for `nanoseconds`.
-    /// The `nanoseconds` argument is a u63 to allow coercion to the i64 used
-    /// in the __kernel_timespec struct.
-    pub fn run_for_ns(self: *IO, nanoseconds: u63) !void {
-        var timed_out = false;
-        var completion: Completion = undefined;
-        const on_timeout = struct {
-            fn callback(
-                timed_out_ptr: *bool,
-                _completion: *Completion,
-                _result: TimeoutError!void,
-            ) void {
-                timed_out_ptr.* = true;
-            }
-        }.callback;
-
-        // Submit a timeout which sets the timed_out value to true to terminate the loop below.
-        self.timeout(
-            *bool,
-            &timed_out,
-            on_timeout,
-            &completion,
-            nanoseconds,
-        );
-
-        // Loop until our timeout completion is processed above, which sets timed_out to true.
-        // LLVM shouldn't be able to cache timed_out's value here since its address escapes above.
-        while (!timed_out) {
-            try self.flush(true);
-        }
-    }
-
-    fn flush(self: *IO, wait_for_completions: bool) !void {
+    pub fn poll(self: *IO, mode: PollMode) !void {
         var io_pending = self.io_pending.peek();
         var events: [256]os.Kevent = undefined;
 
@@ -82,11 +50,10 @@ pub const IO = struct {
             var ts = std.mem.zeroes(os.timespec);
 
             // We need to wait (not poll) on kevent if there's nothing to submit or complete.
-            // We should never wait indefinitely (timeout_ptr = null for kevent) given:
-            // - tick() is non-blocking (wait_for_completions = false)
-            // - run_for_ns() always submits a timeout
+            // We should never wait indefinitely (timeout_ptr = null for kevent) 
+            // as it's expected to sleep until some enqueued IO/timeout triggers.
             if (change_events == 0 and self.completed.peek() == null) {
-                if (wait_for_completions) {
+                if (mode == .blocking) {
                     const timeout_ns = next_timeout orelse @panic("kevent() blocking forever");
                     ts.tv_nsec = @intCast(@TypeOf(ts.tv_nsec), timeout_ns % std.time.ns_per_s);
                     ts.tv_sec = @intCast(@TypeOf(ts.tv_sec), timeout_ns / std.time.ns_per_s);

@@ -28,6 +28,46 @@ pub fn buffer_limit(buffer_len: usize) usize {
     return std.math.min(limit, buffer_len);
 }
 
+pub const PollMode = enum {
+    blocking,
+    non_blocking,
+};
+
+pub const Extensions = struct {
+    pub fn tick(self: *IO) !void {
+        try self.poll(.non_blocking);
+    }
+
+    pub fn run_for_ns(self: *IO, nanoseconds: u63) !void {
+        var timed_out = false;
+        var completion: IO.Completion = undefined;
+        const on_timeout = struct {
+            fn callback(
+                timed_out_ptr: *bool,
+                _completion: *IO.Completion,
+                _result: IO.TimeoutError!void,
+            ) void {
+                timed_out_ptr.* = true;
+            }
+        }.callback;
+
+        // Submit a timeout which sets the timed_out value to true to terminate the loop below.
+        self.timeout(
+            *bool,
+            &timed_out,
+            on_timeout,
+            &completion,
+            nanoseconds,
+        );
+
+        // Loop until our timeout completion is processed above, which sets timed_out to true.
+        // LLVM shouldn't be able to cache timed_out's value here since its address escapes above.
+        while (!timed_out) {
+            try self.poll(.blocking);
+        }
+    }
+};
+
 test "I/O" {
     _ = @import("io/test.zig");
 }

@@ -6,9 +6,14 @@ const config = @import("../config.zig");
 
 const FIFO = @import("../fifo.zig").FIFO;
 const Time = @import("../time.zig").Time;
-const buffer_limit = @import("../io.zig").buffer_limit;
+
+const _io = @import("../io.zig");
+const PollMode = _io.PollMode; 
+const buffer_limit = _io.buffer_limit;
 
 pub const IO = struct {
+    pub usingnamespace _io.Extensions;
+    
     iocp: os.windows.HANDLE,
     timer: Time = .{},
     io_pending: usize = 0,
@@ -34,34 +39,7 @@ pub const IO = struct {
         os.windows.WSACleanup() catch unreachable;
     }
 
-    pub fn tick(self: *IO) !void {
-        return self.flush(.non_blocking);
-    }
-
-    pub fn run_for_ns(self: *IO, nanoseconds: u63) !void {
-        const Callback = struct {
-            fn onTimeout(timed_out: *bool, completion: *Completion, result: TimeoutError!void) void {
-                _ = result catch unreachable;
-                _ = completion;
-                timed_out.* = true;
-            }
-        };
-
-        var timed_out = false;
-        var completion: Completion = undefined;
-        self.timeout(*bool, &timed_out, Callback.onTimeout, &completion, nanoseconds);
-
-        while (!timed_out) {
-            try self.flush(.blocking);
-        }
-    }
-
-    const FlushMode = enum {
-        blocking,
-        non_blocking,
-    };
-
-    fn flush(self: *IO, mode: FlushMode) !void {
+    pub fn poll(self: *IO, mode: PollMode) !void {
         if (self.completed.peek() == null) {
             // Compute how long to poll by flushing timeout completions.
             // NOTE: this may push to completed queue
