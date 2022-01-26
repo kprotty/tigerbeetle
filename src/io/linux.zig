@@ -16,7 +16,7 @@ const buffer_limit = _io.buffer_limit;
 
 pub const IO = struct {
     pub usingnamespace _io.Extensions;
-    
+
     ring: IO_Uring,
 
     /// Operations not yet submitted to the kernel and waiting on available space in the
@@ -35,37 +35,48 @@ pub const IO = struct {
     }
 
     pub fn poll(self: *IO, mode: PollMode) !void {
-        {
-            var copy = self.unqueued;
-            self.unqueued = .{};
-            while (copy.pop()) |completion| self.enqueue(completion);
-        }
+        // Process unqueued and fill up the sq.
+        var unqueued = self.unqueued;
+        self.unqueued = .{};
+        while (unqueued.pop()) |completion| self.enqueue(completion);
 
-        self.poll_completions(.non_blocking) catch unreachable;
-
-        const queued = self.ring.sq.sqe_tail -% self.ring.sq.sqe_head;
-        const wait_nr: u32 = switch (mode) {
-            .non_blocking => 0,
-            .blocking => @boolToInt(self.completed.peek() == null),
-        };
-
-        while ((queued | wait_nr) != 0) {
-            _ = self.ring.submit_and_wait(wait_nr) catch |err| switch (err) {
-                error.SignalInterrupt => continue,
-                error.CompletionQueueOvercommitted, error.SystemResources => {
-                    try self.poll_completions(.blocking);
-                    continue;
-                },
-                else => return err,
+        while (true) {
+            // Decide how/if we want to io_uring_enter().
+            const to_submit = self.ring.flush_sq();
+            const min_complete: u32 = switch (mode) {
+                .blocking => @boolToInt(self.completed.peek() == null),
+                .non_blocking => 0,
             };
+
+            // enter() if there's anything to submit or completions to wait for.
+            if ((to_submit | min_complete) > 0) {
+                _ = self.ring.enter(
+                    to_submit,
+                    min_complete,
+                    linux.IORING_ENTER_GETEVENTS * @boolToInt(min_complete > 0),
+                ) catch |err| switch (err) {
+                    error.SignalInterrupt => continue,
+                    // This happens when we're trying to submit new sqes but
+                    // there are either too many inflight or it would overflow the cq.
+                    // We must drain the cq to free up sq space/memory for submission then try again.
+                    error.CompletionQueueOvercommitted, error.SystemResources => {
+                        assert(to_submit > 0);
+                        try self.poll_completions(.blocking);
+                        continue;
+                    },
+                    else => return err,
+                };
+            }
+            
+            // Drain the cq of completions that we were waiting for above.
+            self.poll_completions(.non_blocking) catch unreachable;
             break;
         }
 
-        {
-            var copy = self.completed;
-            self.completed = .{};
-            while (copy.pop()) |completion| completion.complete();
-        }
+        // Process completed after polling.
+        var completed = self.completed;
+        self.completed = .{};
+        while (completed.pop()) |completion| completion.complete();
     }
 
     fn poll_completions(self: *IO, mode: PollMode) !void {
@@ -74,19 +85,23 @@ pub const IO = struct {
         var wait_remaining: u32 = @boolToInt(mode == .blocking);
 
         while (polled < cqes.len) {
-            const completed = self.ring.copy_cqes(&cqes, wait_remaining) catch |err| switch (err) {
+            // Copy cqes into the available cq_buf with tracked wait_nr
+            const cq_buf = cqes[polled..];
+            const completed = self.ring.copy_cqes(cq_buf, wait_remaining) catch |err| switch (err) {
                 error.SignalInterrupt => continue,
                 else => |e| return e,
             };
 
-            for (cqes[polled..completed]) |cqe| {
+            // Bump th cq_buf + wait_nr based on how many completed
+            polled += completed;
+            wait_remaining -= std.math.min(wait_remaining, completed);
+
+            // Process the completed entries written to the cq_buf
+            for (cq_buf[0..completed]) |cqe| {
                 const completion = @intToPtr(*Completion, @intCast(usize, cqe.user_data));
                 completion.result = cqe.res;
                 self.completed.push(completion);
             }
-
-            wait_remaining -= std.math.min(wait_remaining, completed);
-            polled += completed;
         }
     }
 
