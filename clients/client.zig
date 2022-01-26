@@ -44,29 +44,18 @@ fn OperationUnion(
     });
 }
 
-/// Converts an instance of OperationUnion(A, X) to OperationUnion(B, X)
-/// where Union = A and @TypeOf(value) = B.
-/// This is used for transforming c-style unions with a separate tag into zig-style unions.
-fn cast_operation_union(
-    comptime Union: type, 
+fn size_of_operation(
     operation: Operation,
-    value: anytype,
-) T {
-    const Value = @TypeOf(value);
-    const op_fields = std.meta.fields(Operation);
-    comptime var mapping: [op_fields.len]fn(Value) T = undefined;
-
-    inline for (op_fields) |op_field| {
-        const op_name = op_field.name;
-        const op = @field(Operation, op_name);
-        mapping[@enumToInt(op)] = struct {
-            fn cast(v: Value) T {
-                return @unionInit(T, op_name, @field(v, op_name));
-            }
-        }.cast;
+    comptime FieldType: fn(Operation) type,
+) usize {
+    var bytes: usize = 0;
+    inline for (std.meta.fields(Operation)) |op_field| {
+        const op = @field(Operation, op_field.name);
+        if (tb_completion.operation == op) {
+            bytes = @sizeOf(FieldType(op));
+        }
     }
-
-    return mapping[@enumToInt(operation)](value);
+    return bytes;
 }
 
 /// Represents the atomic event state of a client queue.
@@ -115,6 +104,10 @@ const tb_request_t = OperationUnion(.Extern, StateMachine.Event);
 /// C union of the tigerbeetle state machine operation results
 const tb_response_t = OperationUnion(.Extern, StateMachine.Result);
 
+const tb_status_t = enum(c_int) {
+    // TODO: handle conversion from Client.Error
+};
+
 /// A completion represents a node which encodes an asynchronous state machine transaction.
 ///
 /// Completions have their operation and data.request filled in by the client for submission.
@@ -126,6 +119,7 @@ const tb_completion_t = extern struct {
     next: ?*tb_completion_t,
     user_data: usize,
     operation: tb_operation_t,
+    status: tb_status_t,
     data: extern union {
         request: tb_request_t,
         response: tb_response_t,
@@ -242,7 +236,76 @@ else if (builtin.target.os.tag == .windows)
 else 
     @compileError("must link to libc when building tb_client");
 
-const ClientThread = struct {
+
+const IOEvent = struct {
+    fn init(self: *IOEvent, io: *IO) void {
+
+    }
+
+    fn deinit(self: *IOEvent) void {
+
+    }
+
+    fn wait(self: *IOEvent) void {
+
+    }
+
+    fn notify(self: *IOEvent) void {
+
+    }
+};
+
+const DebounceInterval = struct {
+    io: *IO,
+    time: Time = .{},
+    deadline: u64 = 0,
+    is_running: bool = false;
+    io_completion: IO.Completion = undefined,
+
+    const wait_delay = 1 * std.time.ns_per_s;
+
+    pub fn reset(self: *DebounceInterval) void {
+        const now = self.time.monotonic();
+        self.deadline = now + wait_delay;
+        self.schedule(wait_delay);
+    }
+
+    fn schedule(self: *DebounceInterval, delay: u64) void {
+        if (!self.is_running) {
+            self.is_running = true;
+            self.io.timeout(
+                DebounceInterval,
+                self,
+                on_timeout,
+                &self.io_completion,
+                delay,
+            );
+        }
+    }
+
+    fn on_timeout(
+        self: *DebounceInterval,
+        io_completion: *IO.Completion,
+        result: IO.TimeoutError!void,
+    ) void {
+        _ = result;
+        _ = io_completion;
+
+        assert(self.is_running);
+        self.is_running = false;
+        
+        const now = self.time.monotonic();
+        const delay = std.math.sub(u64, self.deadline, now) catch blk: {
+            self.deadline = now + wait_delay;
+            break :blk wait_delay;
+        };
+
+        self.schedule(delay);
+    }
+};
+
+const Context = struct {
+    addresses: []std.net.Address,
     io: IO,
     message_bus: MessageBus,
     client: Client,
@@ -250,33 +313,22 @@ const ClientThread = struct {
     cq_notify: fn (*tb_client_t, usize) callconv(.C) void,
     cq_notify_context: usize,
     tb_client: tb_client_t,
-    is_running: Atomic(bool),
-    thread: std.Thread,
-    completions: [32]tb_completion_t, // TODO: dynamically allocated
 
-    fn create(
-        cluster_id: u32,
-        addresses_raw: []const u8,
+    fn init(
+        self: *Context, 
+        client_id: u128, 
+        addresses: []const u8,
         cq_notify_context: usize,
         cq_notify: fn (*tb_client_t, usize) callconv(.C) void,
-    ) !*ClientThread {
-        const client_id = std.crypto.random.int(u128);
-        log.debug("init: initializing client_id={}", .{client_id});
-
-        const addresses = vsr.parse_addresses(allocator, addresses_raw) catch |err| {
-            log.err("failed to parse addresses", .{});
+    ) !void {
+        self.addresses = vsr.parse_addresses(allocator, addresses) catch |err| {
+            log.err("failed to parse addresses: {}", .{err});
             return err;
         };
-        errdefer allocator.free(addresses);
-
-        const self = allocator.create(ClientThread) catch |err| {
-            log.err("failed to allocate context", .{});
-            return err;
-        };
-        errdefer allocator.destroy(self);
-
+        errdefer allocator.free(self.addresses);
+        
         self.io = IO.init(32, 0) catch |err| {
-            log.err("failed to initialize io", .{});
+            log.err("failed to initialize io: {}", .{err});
             return err;
         };
         errdefer self.io.deinit();
@@ -284,11 +336,11 @@ const ClientThread = struct {
         self.message_bus = MessageBus.init(
             allocator,
             cluster_id,
-            addresses,
+            self.addresses,
             client_id,
             &self.io,
         ) catch |err| {
-            log.err("failed to initialize message bus", .{});
+            log.err("failed to initialize message bus: {}", .{err});
             return err;
         };
         errdefer self.message_bus.deinit();
@@ -300,7 +352,7 @@ const ClientThread = struct {
             @intCast(u8, addresses.len),
             &self.message_bus,
         ) catch |err| {
-            log.err("failed to initialize zig client", .{});
+            log.err("failed to initialize zig client: {}", .{err});
             return err;
         };
         errdefer self.client.deinit();
@@ -311,9 +363,153 @@ const ClientThread = struct {
         self.on_cq_ready_ctx = on_cq_ready_ctx;
         self.on_cq_ready = on_cq_ready;
         self.tb_client = .{};
+    }
+
+    fn deinit(self: *Context) void {
+        self.client.deinit();
+        self.message_bus.deinit();
+        self.io.deinit();
+        allocator.free(self.addresses);
+    }
+};
+
+const BatchProcessor = struct {
+    context: *Context,
+    batches: [num_batches]Batch = [_]Batch{.{}} ** num_batches,
+
+    fn enqueue(self: *BatchProcessor, tb_completion: *tb_completion_t) !void {
+        const operation = tb_completion.operation;
+        const batch = &self.batches[@enumToInt(operation)];
+
+        const bytes = size_of_operation(operation);
+        const request = @ptrCast([*]const u8, &tb_completion.data.request)[0..bytes];
+
+        while (true) {
+            const message = batch.message orelse self.context.client.get_message() orelse {
+                return error.OutOfMessages;
+            };
+
+            const buffer = message.buffer[@sizeOf(Header)..][batch.wrote..];
+            if (buffer.len + request.len > config.message_size_max) {
+                batch.flush(self.context);
+                continue;
+            }
+
+            std.mem.copy(u8, buffer, request);
+            batch.wrote += request.len;
+
+            if (batch.head == null) batch.head = tb_completion;
+            if (batch.tail) |tail| tail.next = tb_completion;
+            batch.tail = tb_completion;
+            tb_completion.next = null;
+            return;
+        }
+    }
+
+    fn flush(self: *BatchProcessor) void {
+        for (self.batches) |*batch| batch.flush(self.context);
+    }
+
+    const num_batches = std.meta.fields(Operation).len;
+    const Batch = struct {
+        head: ?*tb_completion_t = null,
+        tail: ?*tb_completion_t = null,
+        message: ?*Message = null,
+        wrote: usize = 0,
+
+        fn flush(self: *Batch, operation: Operation, context: *Context) void {
+            const message = self.message orelse return;
+            self.message = null;
+
+            client.request(
+                @as(u128, @ptrToInt(self.queue)),
+
+            )
+        }
+    };
+
+    const BatchCompletion = struct {
+        queue: *tb_completion_t,
+        context: *Context,
+
+        const Self = @This();
+        const UserDataInt = std.meta.Int(.unsigned, @bitSizeOf(Self));
+
+        fn to_user_data(self: Self) u128 {
+            return @as(u128, @bitCast(UserDataInt, self));
+        }
+
+        fn from_user_data(user_data: u128) Self {
+            return @bitCast(Self, @intCast(UserDataInt, user_data));
+        }
+
+        fn on_result(user_data: u128, op: Operation, results: Client.Error![]const u8) void {
+            const self = Self.from_user_data(user_data);
+            const bytes = size_of_operation(op, StateMachine.Event);
+
+            var status: tb_status_t = .success;
+            var result_bytes = results catch |err| blk: {
+                // TODO: convert err to staus
+                break :blk null;
+            };
+
+            var head = self.queue;
+            var tail = head;
+            while (true) {
+                const tb_completion = tail;
+                assert(tb_completion.operation == op);
+                tb_completion.status = status;
+
+                if (result_bytes) |result| {
+                    const response = @ptrCast([*]u8, &tb_completion.data.response)[0..bytes]
+                }
+
+                tail = tb_completion.next orelse break;
+            }
+
+            const tb_client = &self.context.tb_client;
+            tb_client.cq.ready.push(head, tail);
+
+            if (tb_client.cq.event.try_wake()) {
+                const ctx = self.context.cq_notify_context;
+                (self.context.cq_notify)(tb_client, ctx);
+            }
+        }
+    };
+};
+
+const ClientThread = struct {
+    context: Context,
+    is_running: Atomic(bool),
+    thread: std.Thread,
+    completions: [32]tb_completion_t, // TODO: dynamically allocated
+
+    fn create(
+        cluster_id: u32,
+        addresses: []const u8,
+        cq_notify_context: usize,
+        cq_notify: fn (*tb_client_t, usize) callconv(.C) void,
+    ) !*ClientThread {
+        const client_id = std.crypto.random.int(u128);
+        log.debug("init: initializing client_id={}", .{client_id});
+
+        const self = allocator.create(ClientThread) catch |err| {
+            log.err("failed to allocate context: {}", .{err});
+            return err;
+        };
+        errdefer allocator.destroy(self);
+
+        self.context.init(client_id, addresses, cq_notify_context, cq_notify) catch |err| {
+            log.err("failed to initialize context: {}", .{err});
+            return err;
+        };
+        errdefer self.context.deinit();
 
         self.is_running = Atomic(bool).init(true);
-        self.thread = try std.Thread.spawn(.{}, ClientThread.run, .{self});
+        self.thread = std.Thread.spawn(.{}, ClientThread.run, .{self}) catch |err| {
+            log.err("failed to spawn client thread: {}", .{err});
+            return err;
+        };
         errdefer self.shutdown_and_join();
 
         for (self.completions) |*completion, index| {
@@ -327,10 +523,7 @@ const ClientThread = struct {
 
     fn destroy(self: *ClientThread) void {
         self.shutdown_and_join();
-
-        self.client.deinit();
-        self.message_bus.deinit();
-        self.io.deinit();
+        self.context.deinit();
         
         self.* = undefined;
         allocator.destroy(self);
@@ -351,10 +544,29 @@ const ClientThread = struct {
     }
 
     fn run(self: *ClientThread) void {
-        // TODO: select(IO.wait, IO.timeout with backoff until 10ms)
+        var ready: ?*tb_completion_t = null;
+        var debounce = DebounceInterval{ .io = &self.io };
+
         while (self.is_running.load(.Acquire)) {
-            client.tick();
-            io.run_for_ns(config.tick_ms * std.time.ns_per_ms)
+            process: while (true) {
+                if (ready == null) ready = self.tb_client.sq.ready.pop_all();
+                if (ready == null) break debouce.reset();
+
+                var batch = BatchProcessor{ .client = &self.client };
+                defer batch.flush();
+
+                while (ready) |tb_completion| {
+                    const next = tb_completion.next;
+                    batch.enqueue(tb_completion) catch break :process;
+                    ready = next;
+                };
+            }
+
+            self.client.tick();
+            self.io.poll(.blocking) catch {
+                log.err("io.poll() thread for client_id={} failed with {}", .{self.client_id, err});
+                return;
+            };
         }
     }
 };
