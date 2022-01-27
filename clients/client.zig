@@ -236,10 +236,13 @@ else if (builtin.target.os.tag == .windows)
 else 
     @compileError("must link to libc when building tb_client");
 
-
 const IOEvent = struct {
     fn init(self: *IOEvent, io: *IO) void {
-
+        // create server socket
+        // listen without binding
+        // get socket address given to server socket by os
+        // IO.connect() a socket to that address
+        // IO.accept() the socket
     }
 
     fn deinit(self: *IOEvent) void {
@@ -247,34 +250,36 @@ const IOEvent = struct {
     }
 
     fn wait(self: *IOEvent) void {
-
+        // self.io.recv(connected_socket)
     }
 
     fn notify(self: *IOEvent) void {
-
+        // os.send(accepted_socket)
     }
 };
 
-const DebounceInterval = struct {
+const IOEventWaitDebounceInterval = struct {
     io: *IO,
+    io_event: *IOEvent,
     time: Time = .{},
     deadline: u64 = 0,
     is_running: bool = false;
     io_completion: IO.Completion = undefined,
 
+    const Self = @This();
     const wait_delay = 1 * std.time.ns_per_s;
 
-    pub fn reset(self: *DebounceInterval) void {
+    pub fn reset(self: *Self) void {
         const now = self.time.monotonic();
         self.deadline = now + wait_delay;
         self.schedule(wait_delay);
     }
 
-    fn schedule(self: *DebounceInterval, delay: u64) void {
+    fn schedule(self: *Self, delay: u64) void {
         if (!self.is_running) {
             self.is_running = true;
             self.io.timeout(
-                DebounceInterval,
+                Self,
                 self,
                 on_timeout,
                 &self.io_completion,
@@ -284,7 +289,7 @@ const DebounceInterval = struct {
     }
 
     fn on_timeout(
-        self: *DebounceInterval,
+        self: *Self,
         io_completion: *IO.Completion,
         result: IO.TimeoutError!void,
     ) void {
@@ -296,6 +301,7 @@ const DebounceInterval = struct {
         
         const now = self.time.monotonic();
         const delay = std.math.sub(u64, self.deadline, now) catch blk: {
+            self.io_event.wait();
             self.deadline = now + wait_delay;
             break :blk wait_delay;
         };
@@ -373,11 +379,14 @@ const Context = struct {
     }
 };
 
-const BatchProcessor = struct {
+const CompletionBatchProcessor = struct {
     context: *Context,
     batches: [num_batches]Batch = [_]Batch{.{}} ** num_batches,
 
-    fn enqueue(self: *BatchProcessor, tb_completion: *tb_completion_t) !void {
+    const Self = @This();
+    const num_batches = std.meta.fields(Operation).len;
+
+    fn enqueue(self: *Self, tb_completion: *tb_completion_t) !void {
         const operation = tb_completion.operation;
         const batch = &self.batches[@enumToInt(operation)];
 
@@ -406,11 +415,12 @@ const BatchProcessor = struct {
         }
     }
 
-    fn flush(self: *BatchProcessor) void {
-        for (self.batches) |*batch| batch.flush(self.context);
+    fn flush(self: *Self) void {
+        for (self.batches) |*batch| {
+            batch.flush(self.context);
+        }
     }
 
-    const num_batches = std.meta.fields(Operation).len;
     const Batch = struct {
         head: ?*tb_completion_t = null,
         tail: ?*tb_completion_t = null,
@@ -421,10 +431,26 @@ const BatchProcessor = struct {
             const message = self.message orelse return;
             self.message = null;
 
-            client.request(
-                @as(u128, @ptrToInt(self.queue)),
+            const wrote = self.wrote;
+            assert(wrote > 0);
+            self.wrote = 0;
 
-            )
+            const head = self.head orelse unreachable;
+            self.head = null;
+            self.tail = null;
+
+            const batch_completion = BatchCompletion{
+                .queue = head,
+                .context = context,
+            };
+
+            context.client.request(
+                batch_completion.to_user_data(),
+                BatchCompletion.on_result,
+                operation,
+                message,
+                wrote,
+            );
         }
     };
 
@@ -461,7 +487,9 @@ const BatchProcessor = struct {
                 tb_completion.status = status;
 
                 if (result_bytes) |result| {
-                    const response = @ptrCast([*]u8, &tb_completion.data.response)[0..bytes]
+                    const response = @ptrCast([*]u8, &tb_completion.data.response)[0..bytes];
+                    std.mem.copy(u8, response, result[0..bytes]);
+                    result_bytes = result[bytes..];
                 }
 
                 tail = tb_completion.next orelse break;
@@ -480,6 +508,7 @@ const BatchProcessor = struct {
 
 const ClientThread = struct {
     context: Context,
+    io_event: IOEvent,
     is_running: Atomic(bool),
     thread: std.Thread,
     completions: [32]tb_completion_t, // TODO: dynamically allocated
@@ -505,6 +534,12 @@ const ClientThread = struct {
         };
         errdefer self.context.deinit();
 
+        self.io_event.init(&self.context.io) catch |err| {
+            log.err("failed to initialize io event: {}", .{err});
+            return err;
+        };
+        errdefer self.io_event.deinit();
+
         self.is_running = Atomic(bool).init(true);
         self.thread = std.Thread.spawn(.{}, ClientThread.run, .{self}) catch |err| {
             log.err("failed to spawn client thread: {}", .{err});
@@ -523,6 +558,7 @@ const ClientThread = struct {
 
     fn destroy(self: *ClientThread) void {
         self.shutdown_and_join();
+        self.io_event.deinit();
         self.context.deinit();
         
         self.* = undefined;
@@ -540,16 +576,19 @@ const ClientThread = struct {
     }
 
     fn sq_notify(self: *ClientThread) void {
-        // TODO: IO.notify()
+        self.io_event.notify();
     }
 
     fn run(self: *ClientThread) void {
         var ready: ?*tb_completion_t = null;
-        var debounce = DebounceInterval{ .io = &self.io };
+        var debounce = IOEventWaitDebounceInterval{
+            .io = &self.context.io,
+            .io_event = &io_event,
+        };
 
         while (self.is_running.load(.Acquire)) {
             process: while (true) {
-                if (ready == null) ready = self.tb_client.sq.ready.pop_all();
+                if (ready == null) ready = self.context.tb_client.sq.ready.pop_all();
                 if (ready == null) break debouce.reset();
 
                 var batch = BatchProcessor{ .client = &self.client };
@@ -562,10 +601,10 @@ const ClientThread = struct {
                 };
             }
 
-            self.client.tick();
-            self.io.poll(.blocking) catch {
+            self.context.client.tick();
+            self.context.io.poll(.blocking) catch {
                 log.err("io.poll() thread for client_id={} failed with {}", .{self.client_id, err});
-                return;
+                continue;
             };
         }
     }
