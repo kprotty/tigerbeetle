@@ -33,8 +33,8 @@ pub fn SortedSegmentedArray(
     comptime NodePool: type,
     comptime element_count_max: u32,
     comptime Key: type,
-    comptime key_from_value: fn (*const T) callconv(.Inline) Key,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime key_from_value: *const fn (*const T) callconv(.Inline) Key,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     comptime options: Options,
 ) type {
     return SegmentedArrayType(T, NodePool, element_count_max, Key, key_from_value, compare_keys, options);
@@ -52,8 +52,8 @@ fn SegmentedArrayType(
     comptime element_count_max: u32,
     // Set when the SegmentedArray is ordered:
     comptime Key: ?type,
-    comptime key_from_value: if (Key) |K| (fn (*const T) callconv(.Inline) K) else void,
-    comptime compare_keys: if (Key) |K| (fn (K, K) callconv(.Inline) math.Order) else void,
+    comptime key_from_value: if (Key) |K| (*const fn (*const T) callconv(.Inline) K) else void,
+    comptime compare_keys: if (Key) |K| (*const fn (K, K) callconv(.Inline) math.Order) else void,
     comptime options: Options,
 ) type {
     return struct {
@@ -913,8 +913,8 @@ fn TestContext(
     comptime node_size: u32,
     comptime element_count_max: u32,
     comptime Key: type,
-    comptime key_from_value: fn (*const T) callconv(.Inline) Key,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime key_from_value: *const fn (*const T) callconv(.Inline) Key,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     comptime element_order: enum { sorted, unsorted },
     comptime options: Options,
 ) type {

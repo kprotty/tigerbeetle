@@ -9,19 +9,19 @@ pub fn KWayMergeIterator(
     comptime Context: type,
     comptime Key: type,
     comptime Value: type,
-    comptime key_from_value: fn (*const Value) callconv(.Inline) Key,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime key_from_value: *const fn (*const Value) callconv(.Inline) Key,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     comptime k_max: u32,
     /// Peek the next key in the stream identified by stream_index.
     /// For example, peek(stream_index=2) returns user_streams[2][0].
-    comptime stream_peek: fn (
+    comptime stream_peek: *const fn (
         context: *const Context,
         stream_index: u32,
     ) error{ Empty, Drained }!Key,
-    comptime stream_pop: fn (context: *Context, stream_index: u32) Value,
+    comptime stream_pop: *const fn (context: *Context, stream_index: u32) Value,
     /// Returns true if stream A has higher precedence than stream B.
     /// This is used to deduplicate values across streams.
-    comptime stream_precedence: fn (context: *const Context, a: u32, b: u32) bool,
+    comptime stream_precedence: *const fn (context: *const Context, a: u32, b: u32) bool,
 ) type {
     return struct {
         const Self = @This();

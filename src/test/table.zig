@@ -58,10 +58,10 @@ fn parse_data(comptime Data: type, tokens: *std.mem.TokenIterator(u8)) Data {
                     if (eat(tokens, "_")) {
                         @field(data, value_field.name) = value_field.default_value.?;
                     } else {
-                        @field(data, value_field.name) = parse_data(value_field.field_type, tokens);
+                        @field(data, value_field.name) = parse_data(value_field.type, tokens);
                     }
                 } else {
-                    @field(data, value_field.name) = parse_data(value_field.field_type, tokens);
+                    @field(data, value_field.name) = parse_data(value_field.type, tokens);
                 }
             }
             return data;
@@ -73,7 +73,7 @@ fn parse_data(comptime Data: type, tokens: *std.mem.TokenIterator(u8)) Data {
                     return @unionInit(
                         Data,
                         variant_field.name,
-                        parse_data(variant_field.field_type, tokens),
+                        parse_data(variant_field.type, tokens),
                     );
                 }
             }

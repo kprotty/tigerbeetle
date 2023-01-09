@@ -23,7 +23,7 @@ pub fn Client(comptime StateMachine_: type, comptime MessageBus: type) type {
         };
 
         pub const Request = struct {
-            pub const Callback = fn (
+            pub const Callback = *const fn (
                 user_data: u128,
                 operation: StateMachine.Operation,
                 results: Error![]const u8,
@@ -85,7 +85,7 @@ pub fn Client(comptime StateMachine_: type, comptime MessageBus: type) type {
 
         on_reply_context: ?*anyopaque = null,
         /// Used for testing. Called for replies to all operations (including `register`).
-        on_reply_callback: ?fn (
+        on_reply_callback: ?*const fn (
             context: ?*anyopaque,
             client: *Self,
             request: *Message,

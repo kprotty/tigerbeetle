@@ -160,7 +160,7 @@ pub const EventGroup = union(enum) {
     }
 };
 
-usingnamespace switch (constants.tracer_backend) {
+pub usingnamespace switch (constants.tracer_backend) {
     .none => TracerNone,
     .perfetto => TracerPerfetto,
     .tracy => TracerTracy,

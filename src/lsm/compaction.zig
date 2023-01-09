@@ -77,7 +77,7 @@ pub fn CompactionType(
             IteratorB,
         );
 
-        pub const Callback = fn (it: *Compaction) void;
+        pub const Callback = *const fn (it: *Compaction) void;
 
         const Status = enum {
             idle,

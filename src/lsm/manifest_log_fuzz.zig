@@ -32,7 +32,7 @@ pub const tigerbeetle_config = @import("../config.zig").configs.test_min;
 
 const entries_max_block = ManifestLog.Block.entry_count_max;
 const entries_max_buffered = entries_max_block *
-    std.meta.fieldInfo(ManifestLog, .blocks).field_type.count_max;
+    std.meta.fieldInfo(ManifestLog, .blocks).type.count_max;
 
 pub fn main() !void {
     const allocator = std.testing.allocator;

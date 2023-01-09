@@ -89,7 +89,7 @@ pub const Storage = struct {
     } = .always_asynchronous;
 
     pub const Read = struct {
-        callback: fn (read: *Storage.Read) void,
+        callback: *const fn (read: *Storage.Read) void,
         buffer: []u8,
         zone: vsr.Zone,
         /// Relative offset within the zone.
@@ -105,7 +105,7 @@ pub const Storage = struct {
     };
 
     pub const Write = struct {
-        callback: fn (write: *Storage.Write) void,
+        callback: *const fn (write: *Storage.Write) void,
         buffer: []const u8,
         zone: vsr.Zone,
         /// Relative offset within the zone.
@@ -122,7 +122,7 @@ pub const Storage = struct {
 
     pub const NextTick = struct {
         next: ?*NextTick = null,
-        callback: fn (next_tick: *NextTick) void,
+        callback: *const fn (next_tick: *NextTick) void,
     };
 
     /// Faulty areas are always sized to message_size_max
@@ -160,7 +160,7 @@ pub const Storage = struct {
         assert(options.write_latency_mean >= options.write_latency_min);
         assert(options.read_latency_mean >= options.read_latency_min);
 
-        const memory = try allocator.allocAdvanced(u8, constants.sector_size, size, .exact);
+        const memory = try allocator.alignedAlloc(u8, constants.sector_size, size);
         errdefer allocator.free(memory);
         // TODO: random data
         mem.set(u8, memory, 0);
@@ -296,7 +296,7 @@ pub const Storage = struct {
 
     pub fn on_next_tick(
         storage: *Storage,
-        callback: fn (next_tick: *Storage.NextTick) void,
+        callback: *const fn (next_tick: *Storage.NextTick) void,
         next_tick: *Storage.NextTick,
     ) void {
         next_tick.* = .{ .callback = callback };
@@ -307,7 +307,7 @@ pub const Storage = struct {
     /// * Verifies that the read targets sectors that have been written to.
     pub fn read_sectors(
         storage: *Storage,
-        callback: fn (read: *Storage.Read) void,
+        callback: *const fn (read: *Storage.Read) void,
         read: *Storage.Read,
         buffer: []u8,
         zone: vsr.Zone,
@@ -373,7 +373,7 @@ pub const Storage = struct {
 
     pub fn write_sectors(
         storage: *Storage,
-        callback: fn (write: *Storage.Write) void,
+        callback: *const fn (write: *Storage.Write) void,
         write: *Storage.Write,
         buffer: []const u8,
         zone: vsr.Zone,

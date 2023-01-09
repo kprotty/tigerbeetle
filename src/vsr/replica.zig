@@ -269,19 +269,19 @@ pub fn ReplicaType(
         prng: std.rand.DefaultPrng,
 
         /// Simulator hooks.
-        on_change_state: ?fn (replica: *const Self) void = null,
+        on_change_state: ?*const fn (replica: *const Self) void = null,
         /// Called immediately after a compaction.
-        on_compact: ?fn (replica: *const Self) void = null,
+        on_compact: ?*const fn (replica: *const Self) void = null,
         /// Called immediately after a checkpoint.
         /// Note: The replica may checkpoint without calling this function:
         /// 1. Begin checkpoint.
         /// 2. Write 2/4 SuperBlock copies.
         /// 3. Crash.
         /// 4. Recover in the new checkpoint (but op_checkpoint wasn't called).
-        on_checkpoint: ?fn (replica: *const Self) void = null,
+        on_checkpoint: ?*const fn (replica: *const Self) void = null,
 
         /// Called when `commit_prepare` finishes committing.
-        commit_callback: ?fn (*Self) void = null,
+        commit_callback: ?*const fn (*Self) void = null,
 
         /// The prepare message being committed.
         commit_prepare: ?*Message = null,
@@ -2510,7 +2510,7 @@ pub fn ReplicaType(
         fn commit_op_prefetch(
             self: *Self,
             prepare: *Message,
-            callback: fn (*Self) void,
+            callback: *const fn (*Self) void,
         ) void {
             assert(self.committing);
             assert(self.status == .normal or self.status == .view_change or

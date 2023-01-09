@@ -5,7 +5,7 @@ const math = std.math;
 pub fn CompositeKey(comptime Field: type) type {
     assert(Field == u128 or Field == u64);
 
-    return extern struct {
+    return packed struct {
         const Self = @This();
 
         pub const sentinel_key: Self = .{
@@ -18,10 +18,10 @@ pub fn CompositeKey(comptime Field: type) type {
         // If zeroed padding is needed after the timestamp field.
         const pad = Field == u128;
 
-        pub const Value = extern struct {
-            field: Field align(@alignOf(Field)),
+        pub const Value = packed struct {
+            field: Field,
             /// The most significant bit indicates if the value is a tombstone.
-            timestamp: u64 align(@alignOf(u64)),
+            timestamp: u64,
             padding: (if (pad) u64 else u0) = 0,
 
             comptime {
@@ -31,9 +31,9 @@ pub fn CompositeKey(comptime Field: type) type {
             }
         };
 
-        field: Field align(@alignOf(Field)),
+        field: Field,
         /// The most significant bit must be unset as it is used to indicate a tombstone.
-        timestamp: u64 align(@alignOf(u64)),
+        timestamp: u64,
         padding: (if (pad) u64 else u0) = 0,
 
         comptime {

@@ -27,7 +27,7 @@ pub fn LevelIteratorType(comptime Table: type, comptime Storage: type) type {
         const BlockPtrConst = *align(constants.sector_size) const [constants.block_size]u8;
 
         const TableInfo = Manifest.TableInfo;
-        const TableInfoCallback = fn (
+        const TableInfoCallback = *const fn (
             it: *LevelIterator,
             table: *const TableInfo,
             index_block: BlockPtrConst,
@@ -43,7 +43,7 @@ pub fn LevelIteratorType(comptime Table: type, comptime Storage: type) type {
 
         grid: *Grid,
         manifest: *Manifest,
-        callback: fn (*LevelIterator) void,
+        callback: *const fn (*LevelIterator) void,
         table_info: ?*const TableInfo,
         table_info_callback: TableInfoCallback,
         level: u8,
@@ -123,7 +123,7 @@ pub fn LevelIteratorType(comptime Table: type, comptime Storage: type) type {
         pub fn start(
             it: *LevelIterator,
             context: Context,
-            callback: fn (*LevelIterator) void,
+            callback: *const fn (*LevelIterator) void,
         ) void {
             if (context.direction == .descending) {
                 @panic("TODO Implement descending direction for LevelIterator.");

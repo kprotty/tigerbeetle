@@ -158,7 +158,7 @@ fn emit_enum(
     comptime int_type: []const u8,
     comptime value_fmt: []const u8,
 ) !void {
-    const is_packed_struct = @TypeOf(type_info) == std.builtin.TypeInfo.Struct;
+    const is_packed_struct = @TypeOf(type_info) == std.builtin.Type.Struct;
     if (is_packed_struct) {
         // Packed structs represented as Enum needs a Flags attribute:
         try buffer.writer().print("    [Flags]\n", .{});
@@ -227,7 +227,7 @@ fn emit_struct(
     // It's more efficient than exposing heap-allocated arrays using
     // [MarshalAs(UnmanagedType.ByValArray)] attribute.
     inline for (type_info.fields) |field| {
-        switch (@typeInfo(field.field_type)) {
+        switch (@typeInfo(field.type)) {
             .Array => |array| {
                 try buffer.writer().print(
                     \\        [StructLayout(LayoutKind.Sequential, Size = SIZE)]
@@ -269,7 +269,7 @@ fn emit_struct(
 
     // Fields
     inline for (type_info.fields) |field| {
-        switch (@typeInfo(field.field_type)) {
+        switch (@typeInfo(field.type)) {
             .Array => try buffer.writer().print(
                 \\        {s} {s}Data {s};
                 \\
@@ -288,7 +288,7 @@ fn emit_struct(
             ,
                 .{
                     if (mapping.visibility == .internal) "public" else "private",
-                    dotnet_type(field.field_type),
+                    dotnet_type(field.type),
                     to_case(field.name, .camel),
                 },
             ),
@@ -304,7 +304,7 @@ fn emit_struct(
             const is_private = comptime mapping.is_private(field.name);
             const is_read_only = comptime mapping.is_read_only(field.name);
 
-            switch (@typeInfo(field.field_type)) {
+            switch (@typeInfo(field.type)) {
                 .Array => try buffer.writer().print(
                     \\        {s} byte[] {s} {{ get => {s}.GetData(); {s}set => {s}.SetData(value); }}
                     \\
@@ -322,7 +322,7 @@ fn emit_struct(
                     \\
                 , .{
                     if (is_private) "internal" else "public",
-                    dotnet_type(field.field_type),
+                    dotnet_type(field.type),
                     to_case(field.name, .pascal),
                     to_case(field.name, .camel),
                     if (is_read_only and !is_private) "internal " else "",

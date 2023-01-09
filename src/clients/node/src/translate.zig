@@ -6,7 +6,7 @@ pub fn register_function(
     env: c.napi_env,
     exports: c.napi_value,
     comptime name: [:0]const u8,
-    function: fn (env: c.napi_env, info: c.napi_callback_info) callconv(.C) c.napi_value,
+    function: *const fn (env: c.napi_env, info: c.napi_callback_info) callconv(.C) c.napi_value,
 ) !void {
     var napi_function: c.napi_value = undefined;
     if (c.napi_create_function(env, null, 0, function, null, &napi_function) != c.napi_ok) {
@@ -41,7 +41,7 @@ pub fn capture_undefined(env: c.napi_env) !c.napi_value {
 pub fn set_instance_data(
     env: c.napi_env,
     data: *anyopaque,
-    finalize_callback: fn (env: c.napi_env, data: ?*anyopaque, hint: ?*anyopaque) callconv(.C) void,
+    finalize_callback: *const fn (env: c.napi_env, data: ?*anyopaque, hint: ?*anyopaque) callconv(.C) void,
 ) !void {
     if (c.napi_set_instance_data(env, data, finalize_callback, null) != c.napi_ok) {
         return throw(env, "Failed to initialize environment.");

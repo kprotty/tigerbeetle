@@ -20,10 +20,10 @@ pub fn TableIteratorType(comptime Table: type, comptime Storage: type) type {
         const ValuesRingBuffer = RingBuffer(Table.Value, Table.data.value_count_max, .pointer);
 
         const BlockPtrConst = *align(constants.sector_size) const [constants.block_size]u8;
-        const IndexBlockCallback = fn (it: *TableIterator, index_block: BlockPtrConst) void;
+        const IndexBlockCallback = *const fn (it: *TableIterator, index_block: BlockPtrConst) void;
 
         grid: *Grid,
-        read_done: fn (*TableIterator) void,
+        read_done: *const fn (*TableIterator) void,
         read_table_index: bool,
 
         /// We store only the address and checksum of the table's index block to save memory,
@@ -119,7 +119,7 @@ pub fn TableIteratorType(comptime Table: type, comptime Storage: type) type {
         pub fn start(
             it: *TableIterator,
             context: Context,
-            read_done: fn (*TableIterator) void,
+            read_done: *const fn (*TableIterator) void,
         ) void {
             assert(!it.read_pending);
             assert(it.index_block_callback == null);

@@ -22,8 +22,8 @@ pub const Config = struct {
 pub fn binary_search_values_raw(
     comptime Key: type,
     comptime Value: type,
-    comptime key_from_value: fn (*const Value) callconv(.Inline) Key,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime key_from_value: *const fn (*const Value) callconv(.Inline) Key,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     values: []const Value,
     key: Key,
     comptime config: Config,
@@ -81,7 +81,7 @@ pub fn binary_search_values_raw(
 
 pub inline fn binary_search_keys_raw(
     comptime Key: type,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     keys: []const Key,
     key: Key,
     comptime config: Config,
@@ -109,8 +109,8 @@ const BinarySearchResult = struct {
 pub inline fn binary_search_values(
     comptime Key: type,
     comptime Value: type,
-    comptime key_from_value: fn (*const Value) callconv(.Inline) Key,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime key_from_value: *const fn (*const Value) callconv(.Inline) Key,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     values: []const Value,
     key: Key,
     comptime config: Config,
@@ -124,7 +124,7 @@ pub inline fn binary_search_values(
 
 pub inline fn binary_search_keys(
     comptime Key: type,
-    comptime compare_keys: fn (Key, Key) callconv(.Inline) math.Order,
+    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
     keys: []const Key,
     key: Key,
     comptime config: Config,

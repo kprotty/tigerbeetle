@@ -22,7 +22,7 @@ pub const Signal = struct {
     recv_buffer: [1]u8,
     send_buffer: [1]u8,
 
-    on_signal_fn: fn (*Signal) void,
+    on_signal_fn: *const fn (*Signal) void,
     state: Atomic(enum(u8) {
         running,
         waiting,
@@ -30,7 +30,7 @@ pub const Signal = struct {
         shutdown,
     }),
 
-    pub fn init(self: *Signal, io: *IO, on_signal_fn: fn (*Signal) void) !void {
+    pub fn init(self: *Signal, io: *IO, on_signal_fn: *const fn (*Signal) void) !void {
         self.io = io;
         self.server_socket = os.socket(
             os.AF.INET,

@@ -24,9 +24,9 @@ pub const Layout = struct {
 pub fn SetAssociativeCache(
     comptime Key: type,
     comptime Value: type,
-    comptime key_from_value: fn (*const Value) callconv(.Inline) Key,
-    comptime hash: fn (Key) callconv(.Inline) u64,
-    comptime equal: fn (Key, Key) callconv(.Inline) bool,
+    comptime key_from_value: *const fn (*const Value) callconv(.Inline) Key,
+    comptime hash: *const fn (Key) callconv(.Inline) u64,
+    comptime equal: *const fn (Key, Key) callconv(.Inline) bool,
     comptime layout: Layout,
 ) type {
     assert(math.isPowerOfTwo(@sizeOf(Key)));
@@ -145,11 +145,10 @@ pub fn SetAssociativeCache(
             const tags = try allocator.alloc(Tag, value_count_max);
             errdefer allocator.free(tags);
 
-            const values = try allocator.allocAdvanced(
+            const values = try allocator.alignedAlloc(
                 Value,
                 value_alignment,
                 value_count_max,
-                .exact,
             );
             errdefer allocator.free(values);
 
@@ -553,11 +552,11 @@ fn PackedUnsignedIntegerArray(comptime UInt: type) type {
 
     assert(builtin.target.cpu.arch.endian() == .Little);
     assert(@typeInfo(UInt).Int.signedness == .unsigned);
-    assert(@typeInfo(UInt).Int.bits < meta.bitCount(u8));
+    assert(@typeInfo(UInt).Int.bits < @bitSizeOf(u8));
     assert(math.isPowerOfTwo(@typeInfo(UInt).Int.bits));
 
-    const word_bits = meta.bitCount(Word);
-    const uint_bits = meta.bitCount(UInt);
+    const word_bits = @bitSizeOf(Word);
+    const uint_bits = @bitSizeOf(UInt);
     const uints_per_word = @divExact(word_bits, uint_bits);
 
     // An index bounded by the number of unsigned integers that fit exactly into a word.
@@ -566,7 +565,7 @@ fn PackedUnsignedIntegerArray(comptime UInt: type) type {
 
     // An index bounded by the number of bits (not unsigned integers) that fit exactly into a word.
     const BitsIndex = math.Log2Int(Word);
-    assert(math.maxInt(BitsIndex) == meta.bitCount(Word) - 1);
+    assert(math.maxInt(BitsIndex) == @bitSizeOf(Word) - 1);
     assert(math.maxInt(BitsIndex) == word_bits - 1);
     assert(math.maxInt(BitsIndex) == uint_bits * (math.maxInt(WordIndex) + 1) - 1);
 

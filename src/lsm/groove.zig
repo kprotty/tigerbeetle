@@ -17,9 +17,9 @@ const compaction_snapshot_for_op = @import("tree.zig").compaction_snapshot_for_o
 
 fn ObjectTreeHelpers(comptime Object: type) type {
     assert(@hasField(Object, "id"));
-    assert(std.meta.fieldInfo(Object, .id).field_type == u128);
+    assert(std.meta.fieldInfo(Object, .id).type == u128);
     assert(@hasField(Object, "timestamp"));
-    assert(std.meta.fieldInfo(Object, .timestamp).field_type == u64);
+    assert(std.meta.fieldInfo(Object, .timestamp).type == u64);
 
     return struct {
         inline fn compare_keys(timestamp_a: u64, timestamp_b: u64) std.math.Order {
@@ -150,7 +150,7 @@ pub fn GrooveType(
     /// - ignored: [][]const u8:
     ///     An array of fields on the Object type that should not be given index trees
     ///
-    /// - derived: { .field = fn (*const Object) ?DerivedType }:
+    /// - derived: { .field = *const fn (*const Object) ?DerivedType }:
     ///     An anonymous struct which contain fields that don't exist on the Object
     ///     but can be derived from an Object instance using the field's corresponding function.
     comptime groove_options: anytype,
@@ -158,11 +158,11 @@ pub fn GrooveType(
     @setEvalBranchQuota(64000);
 
     assert(@hasField(Object, "id"));
-    assert(std.meta.fieldInfo(Object, .id).field_type == u128);
+    assert(std.meta.fieldInfo(Object, .id).type == u128);
     assert(@hasField(Object, "timestamp"));
-    assert(std.meta.fieldInfo(Object, .timestamp).field_type == u64);
+    assert(std.meta.fieldInfo(Object, .timestamp).type == u64);
 
-    comptime var index_fields: []const std.builtin.TypeInfo.StructField = &.{};
+    comptime var index_fields: []const std.builtin.Type.StructField = &.{};
 
     // Generate index LSM trees from the struct fields.
     for (std.meta.fields(Object)) |field| {
@@ -179,11 +179,11 @@ pub fn GrooveType(
 
         if (!ignored) {
             const tree_name = @typeName(Object) ++ "." ++ field.name;
-            const IndexTree = IndexTreeType(Storage, field.field_type, tree_name);
-            index_fields = index_fields ++ [_]std.builtin.TypeInfo.StructField{
+            const IndexTree = IndexTreeType(Storage, field.type, tree_name);
+            index_fields = index_fields ++ [_]std.builtin.Type.StructField{
                 .{
                     .name = field.name,
-                    .field_type = IndexTree,
+                    .type = IndexTree,
                     .default_value = null,
                     .is_comptime = false,
                     .alignment = @alignOf(IndexTree),
@@ -224,7 +224,7 @@ pub fn GrooveType(
         index_fields = index_fields ++ &.{
             .{
                 .name = field.name,
-                .field_type = IndexTree,
+                .type = IndexTree,
                 .default_value = null,
                 .is_comptime = false,
                 .alignment = @alignOf(IndexTree),
@@ -232,13 +232,13 @@ pub fn GrooveType(
         };
     }
 
-    comptime var index_options_fields: []const std.builtin.TypeInfo.StructField = &.{};
+    comptime var index_options_fields: []const std.builtin.Type.StructField = &.{};
     for (index_fields) |index_field| {
-        const IndexTree = index_field.field_type;
-        index_options_fields = index_options_fields ++ [_]std.builtin.TypeInfo.StructField{
+        const IndexTree = index_field.type;
+        index_options_fields = index_options_fields ++ [_]std.builtin.Type.StructField{
             .{
                 .name = index_field.name,
-                .field_type = IndexTree.Options,
+                .type = IndexTree.Options,
                 .default_value = null,
                 .is_comptime = false,
                 .alignment = @alignOf(IndexTree.Options),
@@ -374,7 +374,7 @@ pub fn GrooveType(
 
         const Grid = GridType(Storage);
 
-        const Callback = fn (*Groove) void;
+        const Callback = *const fn (*Groove) void;
         const JoinOp = enum {
             compacting,
             checkpoint,
@@ -473,7 +473,7 @@ pub fn GrooveType(
                 // No value cache for index trees, since they only do range queries.
                 assert(@field(options.tree_options_index, field.name).cache_entries_max == 0);
 
-                @field(index_trees, field.name) = try field.field_type.init(
+                @field(index_trees, field.name) = try field.type.init(
                     allocator,
                     node_pool,
                     grid,
@@ -573,7 +573,7 @@ pub fn GrooveType(
         /// available in `prefetch_objects`.
         pub fn prefetch(
             groove: *Groove,
-            callback: fn (*PrefetchContext) void,
+            callback: *const fn (*PrefetchContext) void,
             context: *PrefetchContext,
         ) void {
             context.* = .{
@@ -588,7 +588,7 @@ pub fn GrooveType(
 
         pub const PrefetchContext = struct {
             groove: *Groove,
-            callback: fn (*PrefetchContext) void,
+            callback: *const fn (*PrefetchContext) void,
             snapshot: u64,
 
             id_iterator: PrefetchIDs.KeyIterator,
@@ -861,7 +861,7 @@ pub fn GrooveType(
 
                 pub fn tree_callback(
                     comptime join_field: JoinField,
-                ) fn (*TreeFor(join_field)) void {
+                ) *const fn (*TreeFor(join_field)) void {
                     return struct {
                         fn tree_cb(tree: *TreeFor(join_field)) void {
                             // Derive the groove pointer from the tree using the join_field.
@@ -893,7 +893,7 @@ pub fn GrooveType(
             };
         }
 
-        pub fn open(groove: *Groove, callback: fn (*Groove) void) void {
+        pub fn open(groove: *Groove, callback: *const fn (*Groove) void) void {
             const Join = JoinType(.open);
             Join.start(groove, callback);
 
@@ -922,7 +922,7 @@ pub fn GrooveType(
             }
         }
 
-        pub fn checkpoint(groove: *Groove, callback: fn (*Groove) void) void {
+        pub fn checkpoint(groove: *Groove, callback: *const fn (*Groove) void) void {
             // Start a checkpoint join operation.
             const Join = JoinType(.checkpoint);
             Join.start(groove, callback);

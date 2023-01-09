@@ -312,7 +312,7 @@ fn binary_search_keys(
     comptime layout: Layout,
     comptime Key: type,
     comptime V: type,
-    comptime compare_keys: fn (Key, Key) math.Order,
+    comptime compare_keys: *const fn (Key, Key) math.Order,
     keys: []const Key,
     values: []const V,
     key: Key,

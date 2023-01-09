@@ -59,7 +59,7 @@ pub fn GridType(comptime Storage: type) type {
         pub const NextTick = Storage.NextTick;
 
         pub const Write = struct {
-            callback: fn (*Grid.Write) void,
+            callback: *const fn (*Grid.Write) void,
             address: u64,
             block: *BlockPtr,
 
@@ -74,7 +74,7 @@ pub fn GridType(comptime Storage: type) type {
         };
 
         pub const Read = struct {
-            callback: fn (*Grid.Read, BlockPtrConst) void,
+            callback: *const fn (*Grid.Read, BlockPtrConst) void,
             address: u64,
             checksum: u128,
             block_type: BlockType,
@@ -198,7 +198,7 @@ pub fn GridType(comptime Storage: type) type {
 
         pub fn on_next_tick(
             grid: *Grid,
-            callback: fn (*Grid.NextTick) void,
+            callback: *const fn (*Grid.NextTick) void,
             next_tick: *Grid.NextTick,
         ) void {
             grid.superblock.storage.on_next_tick(callback, next_tick);
@@ -283,7 +283,7 @@ pub fn GridType(comptime Storage: type) type {
         /// NOTE: This will consume `block` and replace it with a fresh block.
         pub fn write_block(
             grid: *Grid,
-            callback: fn (*Grid.Write) void,
+            callback: *const fn (*Grid.Write) void,
             write: *Grid.Write,
             block: *BlockPtr,
             address: u64,
@@ -365,7 +365,7 @@ pub fn GridType(comptime Storage: type) type {
         /// block has been recovered.
         pub fn read_block(
             grid: *Grid,
-            callback: fn (*Grid.Read, BlockPtrConst) void,
+            callback: *const fn (*Grid.Read, BlockPtrConst) void,
             read: *Grid.Read,
             address: u64,
             checksum: u128,

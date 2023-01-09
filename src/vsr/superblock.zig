@@ -410,7 +410,7 @@ pub fn SuperBlockType(comptime Storage: type) type {
             };
 
             superblock: *SuperBlock,
-            callback: fn (context: *Context) void,
+            callback: *const fn (context: *Context) void,
             caller: Caller,
 
             write: Storage.Write = undefined,
@@ -498,17 +498,16 @@ pub fn SuperBlockType(comptime Storage: type) type {
             const block_count_limit = shard_count_limit * FreeSet.shard_bits;
             assert(block_count_limit <= block_count_max);
 
-            const a = try allocator.allocAdvanced(SuperBlockSector, constants.sector_size, 1, .exact);
+            const a = try allocator.alignedAlloc(SuperBlockSector, constants.sector_size, 1);
             errdefer allocator.free(a);
 
-            const b = try allocator.allocAdvanced(SuperBlockSector, constants.sector_size, 1, .exact);
+            const b = try allocator.alignedAlloc(SuperBlockSector, constants.sector_size, 1);
             errdefer allocator.free(b);
 
-            const reading = try allocator.allocAdvanced(
+            const reading = try allocator.alignedAlloc(
                 [constants.superblock_copies]SuperBlockSector,
                 constants.sector_size,
                 1,
-                .exact,
             );
             errdefer allocator.free(reading);
 
@@ -528,27 +527,24 @@ pub fn SuperBlockType(comptime Storage: type) type {
             var client_table = try ClientTable.init(allocator, options.message_pool);
             errdefer client_table.deinit(allocator);
 
-            const manifest_buffer = try allocator.allocAdvanced(
+            const manifest_buffer = try allocator.alignedAlloc(
                 u8,
                 constants.sector_size,
                 superblock_trailer_manifest_size_max,
-                .exact,
             );
             errdefer allocator.free(manifest_buffer);
 
-            const free_set_buffer = try allocator.allocAdvanced(
+            const free_set_buffer = try allocator.alignedAlloc(
                 u8,
                 constants.sector_size,
                 SuperBlockFreeSet.encode_size_max(block_count_limit),
-                .exact,
             );
             errdefer allocator.free(free_set_buffer);
 
-            const client_table_buffer = try allocator.allocAdvanced(
+            const client_table_buffer = try allocator.alignedAlloc(
                 u8,
                 constants.sector_size,
                 superblock_trailer_client_table_size_max,
-                .exact,
             );
             errdefer allocator.free(client_table_buffer);
 
@@ -589,7 +585,7 @@ pub fn SuperBlockType(comptime Storage: type) type {
 
         pub fn format(
             superblock: *SuperBlock,
-            callback: fn (context: *Context) void,
+            callback: *const fn (context: *Context) void,
             context: *Context,
             options: FormatOptions,
         ) void {
@@ -648,7 +644,7 @@ pub fn SuperBlockType(comptime Storage: type) type {
 
         pub fn open(
             superblock: *SuperBlock,
-            callback: fn (context: *Context) void,
+            callback: *const fn (context: *Context) void,
             context: *Context,
         ) void {
             assert(!superblock.opened);
@@ -667,7 +663,7 @@ pub fn SuperBlockType(comptime Storage: type) type {
         // change? If not, forbid it.
         pub fn checkpoint(
             superblock: *SuperBlock,
-            callback: fn (context: *Context) void,
+            callback: *const fn (context: *Context) void,
             context: *Context,
             vsr_state: SuperBlockSector.VSRState,
         ) void {
@@ -691,7 +687,7 @@ pub fn SuperBlockType(comptime Storage: type) type {
         /// The vsr_state must not update the `commit_min` or `commit_min_checksum`.
         pub fn view_change(
             superblock: *SuperBlock,
-            callback: fn (context: *Context) void,
+            callback: *const fn (context: *Context) void,
             context: *Context,
             vsr_state: SuperBlockSector.VSRState,
         ) void {

@@ -23,7 +23,7 @@ const expectError = testing.expectError;
 /// if the third argument should be popped first.
 /// For example, to make `pop` return the smallest number, provide
 /// `fn lessThan(context: void, a: T, b: T) Order { _ = context; return std.math.order(a, b); }`
-pub fn PriorityQueue(comptime T: type, comptime Context: type, comptime compareFn: fn (context: Context, a: T, b: T) Order) type {
+pub fn PriorityQueue(comptime T: type, comptime Context: type, comptime compareFn: *const fn (context: Context, a: T, b: T) Order) type {
     return struct {
         const Self = @This();
 

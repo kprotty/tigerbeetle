@@ -32,9 +32,9 @@ pub const ClusterOptions = struct {
     storage_size_limit: u64,
 
     seed: u64,
-    on_change_state: fn (replica: *const Replica) void,
-    on_compact: fn (replica: *const Replica) void,
-    on_checkpoint: fn (replica: *const Replica) void,
+    on_change_state: *const fn (replica: *const Replica) void,
+    on_compact: *const fn (replica: *const Replica) void,
+    on_checkpoint: *const fn (replica: *const Replica) void,
 
     network_options: NetworkOptions,
     storage_options: Storage.Options,

@@ -95,7 +95,7 @@ pub fn PostedGrooveType(comptime Storage: type) type {
 
         /// This field is necessary to expose the same open()/compact()/checkpoint() function
         /// signatures as the real Groove type.
-        callback: ?fn (*PostedGroove) void = null,
+        callback: ?*const fn (*PostedGroove) void = null,
 
         /// See comments for Groove.Options.
         pub const Options = struct {
@@ -193,7 +193,7 @@ pub fn PostedGrooveType(comptime Storage: type) type {
         /// available in `prefetch_objects`.
         pub fn prefetch(
             groove: *PostedGroove,
-            callback: fn (*PrefetchContext) void,
+            callback: *const fn (*PrefetchContext) void,
             context: *PrefetchContext,
         ) void {
             context.* = .{
@@ -208,7 +208,7 @@ pub fn PostedGrooveType(comptime Storage: type) type {
 
         pub const PrefetchContext = struct {
             groove: *PostedGroove,
-            callback: fn (*PrefetchContext) void,
+            callback: *const fn (*PrefetchContext) void,
             snapshot: u64,
 
             id_iterator: PrefetchIDs.KeyIterator,
@@ -334,19 +334,19 @@ pub fn PostedGrooveType(comptime Storage: type) type {
             callback(groove);
         }
 
-        pub fn open(groove: *PostedGroove, callback: fn (*PostedGroove) void) void {
+        pub fn open(groove: *PostedGroove, callback: *const fn (*PostedGroove) void) void {
             assert(groove.callback == null);
             groove.callback = callback;
             groove.tree.open(tree_callback);
         }
 
-        pub fn compact(groove: *PostedGroove, callback: fn (*PostedGroove) void, op: u64) void {
+        pub fn compact(groove: *PostedGroove, callback: *const fn (*PostedGroove) void, op: u64) void {
             assert(groove.callback == null);
             groove.callback = callback;
             groove.tree.compact(tree_callback, op);
         }
 
-        pub fn checkpoint(groove: *PostedGroove, callback: fn (*PostedGroove) void) void {
+        pub fn checkpoint(groove: *PostedGroove, callback: *const fn (*PostedGroove) void) void {
             assert(groove.callback == null);
             groove.callback = callback;
             groove.tree.checkpoint(tree_callback);

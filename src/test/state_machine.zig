@@ -34,7 +34,7 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
         prepare_timestamp: u64 = 0,
         commit_timestamp: u64 = 0,
 
-        callback: ?fn (state_machine: *StateMachine) void = null,
+        callback: ?*const fn (state_machine: *StateMachine) void = null,
 
         pub fn init(allocator: std.mem.Allocator, grid: *Grid, options: Options) !StateMachine {
             const grid_block = try allocator.alignedAlloc(
@@ -57,7 +57,7 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
         }
 
         // TODO Grid.next_tick
-        pub fn open(state_machine: *StateMachine, callback: fn (*StateMachine) void) void {
+        pub fn open(state_machine: *StateMachine, callback: *const fn (*StateMachine) void) void {
             callback(state_machine);
         }
 
@@ -74,7 +74,7 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
 
         pub fn prefetch(
             state_machine: *StateMachine,
-            callback: fn (*StateMachine) void,
+            callback: *const fn (*StateMachine) void,
             op: u64,
             operation: Operation,
             input: []const u8,
@@ -112,7 +112,7 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
         // to test grid recovery.
         pub fn compact(
             state_machine: *StateMachine,
-            callback: fn (*StateMachine) void,
+            callback: *const fn (*StateMachine) void,
             op: u64,
         ) void {
             _ = op;
@@ -121,13 +121,13 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
 
         pub fn checkpoint(
             state_machine: *StateMachine,
-            callback: fn (*StateMachine) void,
+            callback: *const fn (*StateMachine) void,
         ) void {
             state_machine.next_tick(callback);
         }
 
         // TODO Replace with Grid.next_tick()
-        fn next_tick(state_machine: *StateMachine, callback: fn (*StateMachine) void) void {
+        fn next_tick(state_machine: *StateMachine, callback: *const fn (*StateMachine) void) void {
             // TODO This is a hack to defer till the next tick; use Grid.next_tick instead.
             var free_set = state_machine.grid.superblock.free_set;
             const reservation = free_set.reserve(1).?;
