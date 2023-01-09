@@ -123,7 +123,7 @@ pub fn build(b: *std.build.Builder) void {
 
         // for src/clients/c/tb_client_header_test.zig to use cImport on tb_client.h
         unit_tests.linkLibC();
-        unit_tests.addIncludeDir("src/clients/c/");
+        unit_tests.addIncludePath("src/clients/c/");
 
         const test_step = b.step("test", "Run the unit tests");
         test_step.dependOn(&unit_tests.step);
@@ -338,7 +338,7 @@ fn link_tracer_backend(
                     "-fno-sanitize=undefined",
                 };
 
-            exe.addIncludeDir("./tools/tracy/public/tracy");
+            exe.addIncludePath("./tools/tracy/public/tracy");
             exe.addCSourceFile("./tools/tracy/public/TracyClient.cpp", tracy_c_flags);
             exe.linkLibC();
             exe.linkSystemLibraryName("c++");

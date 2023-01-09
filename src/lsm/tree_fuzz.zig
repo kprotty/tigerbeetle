@@ -474,7 +474,7 @@ pub fn main() !void {
         .write_latency_mean = 0 + fuzz.random_int_exponential(random, u64, 20),
     };
 
-    const fuzz_op_count = @minimum(
+    const fuzz_op_count = std.math.min(
         fuzz_args.events_max orelse @as(usize, 1E7),
         fuzz.random_int_exponential(random, usize, 1E6),
     );

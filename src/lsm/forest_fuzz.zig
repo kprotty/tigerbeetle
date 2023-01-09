@@ -401,7 +401,7 @@ pub fn main() !void {
     var rng = std.rand.DefaultPrng.init(fuzz_args.seed);
     const random = rng.random();
 
-    const fuzz_op_count = @minimum(
+    const fuzz_op_count = std.math.min(
         fuzz_args.events_max orelse @as(usize, 1E7),
         fuzz.random_int_exponential(random, usize, 1E6),
     );

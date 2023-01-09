@@ -8,7 +8,6 @@ const log = std.log.scoped(.state_machine);
 pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
     message_body_size_max: usize,
 }) type {
-    _ = Storage;
     _ = constants_;
 
     return struct {
@@ -97,8 +96,6 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
         ) usize {
             _ = state_machine;
             _ = client;
-            _ = input;
-            _ = output;
             assert(op != 0);
 
             switch (operation) {
@@ -222,7 +219,6 @@ fn WorkloadType(comptime StateMachine: type) type {
             request_body: []align(@alignOf(vsr.Header)) const u8,
             reply_body: []align(@alignOf(vsr.Header)) const u8,
         ) void {
-            _ = workload;
             _ = client_index;
             _ = timestamp;
 

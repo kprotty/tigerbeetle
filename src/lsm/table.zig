@@ -80,7 +80,7 @@ pub fn TableType(
     comptime table_tombstone: fn (*const TableValue) callconv(.Inline) bool,
     /// Returns a tombstone value representation for a key.
     comptime table_tombstone_from_key: fn (TableKey) callconv(.Inline) TableValue,
-    comptime usage: TableUsage,
+    comptime table_usage: TableUsage,
 ) type {
     return struct {
         const Table = @This();
@@ -93,7 +93,7 @@ pub fn TableType(
         pub const sentinel_key = table_sentinel_key;
         pub const tombstone = table_tombstone;
         pub const tombstone_from_key = table_tombstone_from_key;
-        pub const usage = usage;
+        pub const usage = table_usage;
 
         // Export hashmap context for Key and Value
         pub const HashMapContextValue = struct {
@@ -1038,6 +1038,5 @@ test "Table" {
         .general,
     );
 
-    _ = Table;
     std.testing.refAllDecls(Table.Builder);
 }

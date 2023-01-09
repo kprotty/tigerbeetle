@@ -1058,8 +1058,8 @@ pub fn StateMachineType(comptime Storage: type, comptime constants_: struct {
 }
 
 fn sum_overflows(a: u64, b: u64) bool {
-    var c: u64 = undefined;
-    return @addWithOverflow(u64, a, b, &c);
+    _ = std.math.add(u64, a, b) catch return true;
+    return false;
 }
 
 /// Optimizes for the common case, where the array is zeroed. Completely branchless.
