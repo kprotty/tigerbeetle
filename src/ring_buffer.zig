@@ -21,7 +21,9 @@ pub fn RingBuffer(
             .pointer => *[count_max]T,
         } = switch (buffer_type) {
             .array => undefined,
-            .pointer => @compileError("init() must be used if buffer_type is .pointer!"),
+            // NOTE: previously @compileError("init() must be used if buffer_type is .pointer!")
+            // but this is now eagerly evaluated, even for `buffer_type == .array`.
+            .pointer => undefined,
         },
 
         /// The index of the slot with the first item, if any.

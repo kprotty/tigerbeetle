@@ -103,7 +103,7 @@ pub const Manifest = struct {
         util.copy_disjoint(
             .exact,
             u128,
-            mem.bytesAsSlice(u128, trees),
+            mem.bytesAsSlice(u128, @alignCast(@alignOf(u128), trees)),
             manifest.trees[0..manifest.count],
         );
         size += trees.len;
@@ -112,7 +112,7 @@ pub const Manifest = struct {
         util.copy_disjoint(
             .exact,
             u128,
-            mem.bytesAsSlice(u128, checksums),
+            mem.bytesAsSlice(u128, @alignCast(@alignOf(u128), checksums)),
             manifest.checksums[0..manifest.count],
         );
         size += checksums.len;
@@ -121,7 +121,7 @@ pub const Manifest = struct {
         util.copy_disjoint(
             .exact,
             u64,
-            mem.bytesAsSlice(u64, addresses),
+            mem.bytesAsSlice(u64, @alignCast(@alignOf(u128), addresses)),
             manifest.addresses[0..manifest.count],
         );
         size += addresses.len;
@@ -148,7 +148,7 @@ pub const Manifest = struct {
             .exact,
             u128,
             manifest.trees[0..manifest.count],
-            mem.bytesAsSlice(u128, trees),
+            mem.bytesAsSlice(u128, @alignCast(@alignOf(u128), trees)),
         );
         size += trees.len;
 
@@ -157,7 +157,7 @@ pub const Manifest = struct {
             .exact,
             u128,
             manifest.checksums[0..manifest.count],
-            mem.bytesAsSlice(u128, checksums),
+            mem.bytesAsSlice(u128, @alignCast(@alignOf(u128), checksums)),
         );
         size += checksums.len;
 
@@ -166,7 +166,7 @@ pub const Manifest = struct {
             .exact,
             u64,
             manifest.addresses[0..manifest.count],
-            mem.bytesAsSlice(u64, addresses),
+            mem.bytesAsSlice(u64, @alignCast(@alignOf(u128), addresses)),
         );
         size += addresses.len;
 

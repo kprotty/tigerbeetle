@@ -300,7 +300,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             ))[0..constants.journal_iops_write_max];
             errdefer allocator.free(headers_iops);
 
-            log.debug("{}: slot_count={} size={} headers_size={} prepares_size={}", .{
+            log.debug("{?}: slot_count={?} size={?} headers_size={?} prepares_size={?}", .{
                 replica,
                 slot_count,
                 std.fmt.fmtIntSizeBin(write_ahead_log_zone_size),
@@ -577,7 +577,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             }
 
             log.debug(
-                "{}: copy_latest_headers_between: op_min={} op_max={} dest.len={} copied={}",
+                "{?}: copy_latest_headers_between: op_min={?} op_max={?} dest.len={?} copied={?}",
                 .{
                     journal.replica,
                     op_min,
@@ -910,7 +910,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
 
         fn read_prepare_log(journal: *Journal, op: u64, checksum: ?u128, notice: []const u8) void {
             log.info(
-                "{}: read_prepare: op={} checksum={}: {s}",
+                "{?}: read_prepare: op={?} checksum={?}: {s}",
                 .{ journal.replica, op, checksum, notice },
             );
         }
@@ -925,7 +925,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             assert(journal.header_chunks_recovered.count() == 0);
 
             journal.status = .{ .recovering = callback };
-            log.debug("{}: recover: recovering", .{journal.replica});
+            log.debug("{?}: recover: recovering", .{journal.replica});
 
             var available: usize = journal.reads.available();
             while (available > 0) : (available -= 1) journal.recover_headers();
@@ -942,7 +942,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
 
             if (journal.header_chunks_recovered.count() == HeaderChunks.bit_length) {
                 assert(journal.header_chunks_requested.count() == 0);
-                log.debug("{}: recover_headers: complete", .{journal.replica});
+                log.debug("{?}: recover_headers: complete", .{journal.replica});
                 journal.recover_prepares();
                 return;
             }
@@ -972,7 +972,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             assert(buffer.len <= constants.message_size_max);
             assert(buffer.len + offset <= headers_size);
 
-            log.debug("{}: recover_headers: offset={} size={} recovering", .{
+            log.debug("{?}: recover_headers: offset={?} size={?} recovering", .{
                 journal.replica,
                 offset,
                 buffer.len,
@@ -1006,7 +1006,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             assert(chunk_buffer.len >= @sizeOf(Header));
             assert(chunk_buffer.len % @sizeOf(Header) == 0);
 
-            log.debug("{}: recover_headers: offset={} size={} recovered", .{
+            log.debug("{?}: recover_headers: offset={?} size={?} recovered", .{
                 journal.replica,
                 chunk_index * constants.message_size_max,
                 chunk_buffer.len,
@@ -1091,7 +1091,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
                 .destination_replica = null,
             };
 
-            log.debug("{}: recover_prepare: recovering slot={}", .{
+            log.debug("{?}: recover_prepare: recovering slot={?}", .{
                 journal.replica,
                 slot.index,
             });
@@ -1243,7 +1243,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
                 assert(cases[torn_slot.index].decision(replica.replica_count) == .vsr);
                 cases[torn_slot.index] = &case_cut;
 
-                log.warn("{}: recover_slots: torn prepare in slot={}", .{
+                log.warn("{?}: recover_slots: torn prepare in slot={?}", .{
                     journal.replica,
                     torn_slot.index,
                 });
@@ -1254,7 +1254,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
 
             util.copy_disjoint(.exact, Header, journal.headers_redundant, journal.headers);
 
-            log.debug("{}: recover_slots: dirty={} faulty={}", .{
+            log.debug("{?}: recover_slots: dirty={?} faulty={?}", .{
                 journal.replica,
                 journal.dirty.count,
                 journal.faulty.count,
@@ -1416,7 +1416,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
 
             switch (decision) {
                 .eql, .nil => {
-                    log.debug("{}: recover_slot: recovered slot={} label={s} decision={s}", .{
+                    log.debug("{?}: recover_slot: recovered slot={?} label={s} decision={s}", .{
                         journal.replica,
                         slot.index,
                         case.label,
@@ -1424,7 +1424,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
                     });
                 },
                 .fix, .vsr, .cut => {
-                    log.warn("{}: recover_slot: recovered slot={} label={s} decision={s}", .{
+                    log.warn("{?}: recover_slot: recovered slot={?} label={s} decision={s}", .{
                         journal.replica,
                         slot.index,
                         case.label,
@@ -1531,7 +1531,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             assert(journal.status == .recovered);
             assert(op_min > 0);
 
-            log.debug("{}: remove_entries_from: op_min={}", .{ journal.replica, op_min });
+            log.debug("{?}: remove_entries_from: op_min={?}", .{ journal.replica, op_min });
 
             for (journal.headers) |*header, index| {
                 // We must remove the header regardless of whether it is a prepare or reserved,
@@ -1575,7 +1575,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             assert(journal.status == .recovered);
             assert(header.command == .prepare);
 
-            log.debug("{}: set_header_as_dirty: op={} checksum={}", .{
+            log.debug("{?}: set_header_as_dirty: op={?} checksum={?}", .{
                 journal.replica,
                 header.op,
                 header.checksum,
@@ -1735,7 +1735,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
                 write,
             );
 
-            log.debug("{}: write_header: op={} sectors[{}..{}]", .{
+            log.debug("{?}: write_header: op={?} sectors[{?}..{?}]", .{
                 journal.replica,
                 message.header.op,
                 offset,
@@ -1805,7 +1805,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
         }
 
         fn write_prepare_debug(journal: *const Journal, header: *const Header, status: []const u8) void {
-            log.debug("{}: write: view={} op={} len={}: {} {s}", .{
+            log.debug("{?}: write: view={?} op={?} len={?}: {?} {s}", .{
                 journal.replica,
                 header.view,
                 header.op,
@@ -1857,7 +1857,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
                 }
             }
 
-            log.debug("{}: write_sectors: ring={} offset={} len={} locked", .{
+            log.debug("{?}: write_sectors: ring={?} offset={?} len={?} locked", .{
                 journal.replica,
                 write.range.ring,
                 write.range.offset,
@@ -1897,7 +1897,7 @@ pub fn JournalType(comptime Replica: type, comptime Storage: type) type {
             assert(write.range.locked);
             write.range.locked = false;
 
-            log.debug("{}: write_sectors: ring={} offset={} len={} unlocked", .{
+            log.debug("{?}: write_sectors: ring={?} offset={?} len={?} unlocked", .{
                 journal.replica,
                 write.range.ring,
                 write.range.offset,

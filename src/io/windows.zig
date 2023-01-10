@@ -93,7 +93,7 @@ pub const IO = struct {
                     io_timeout,
                     false, // non-alertable wait
                 ) catch |err| switch (err) {
-                    error.Timeout => 0,
+                    error.Timeout => @as(usize, 0),
                     error.Aborted => unreachable,
                     else => |e| return e,
                 };
@@ -356,15 +356,13 @@ pub const IO = struct {
                     }
 
                     // destroy the client_socket we created if we get a non WouldBlock error
-                    errdefer |result| {
-                        _ = result catch |err| switch (err) {
-                            error.WouldBlock => {},
-                            else => {
-                                os.closeSocket(op.client_socket);
-                                op.client_socket = INVALID_SOCKET;
-                            },
-                        };
-                    }
+                    errdefer |err| switch (err) {
+                        error.WouldBlock => {},
+                        else => {
+                            os.closeSocket(op.client_socket);
+                            op.client_socket = INVALID_SOCKET;
+                        },
+                    };
 
                     return switch (os.windows.ws2_32.WSAGetLastError()) {
                         .WSA_IO_PENDING, .WSAEWOULDBLOCK, .WSA_IO_INCOMPLETE => error.WouldBlock,

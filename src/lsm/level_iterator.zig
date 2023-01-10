@@ -129,6 +129,7 @@ pub fn LevelIteratorType(comptime Table: type, comptime Storage: type) type {
                 @panic("TODO Implement descending direction for LevelIterator.");
             }
 
+            const values = it.values; // Cannot be struct initialized like .tables
             it.* = .{
                 .grid = context.grid,
                 .manifest = context.manifest,
@@ -140,7 +141,7 @@ pub fn LevelIteratorType(comptime Table: type, comptime Storage: type) type {
                 .key_min = context.key_min,
                 .key_max = context.key_max,
                 .direction = context.direction,
-                .values = .{ .buffer = it.values.buffer },
+                .values = values,
                 .tables = .{ .buffer = it.tables.buffer },
                 .key_prev = null,
             };

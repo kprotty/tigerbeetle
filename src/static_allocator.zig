@@ -44,20 +44,32 @@ pub fn transition_from_static_to_deinit(self: *Self) void {
 }
 
 pub fn allocator(self: *Self) mem.Allocator {
-    return mem.Allocator.init(self, alloc, resize, free);
+    return .{
+        .ptr = @ptrCast(*anyopaque, self),
+        .vtable = &vtable,
+    };
 }
 
-fn alloc(self: *Self, len: usize, ptr_align: u29, len_align: u29, ret_addr: usize) error{OutOfMemory}![]u8 {
+const vtable = mem.Allocator.VTable {
+    .alloc = alloc,
+    .resize = resize,
+    .free = free,
+};
+
+fn alloc(ctx: *anyopaque, len: usize, ptr_align: u8, ret_addr: usize) ?[*]u8 {
+    const self = @ptrCast(*Self, @alignCast(@alignOf(Self), ctx));
     assert(self.state == .init);
-    return self.parent_allocator.rawAlloc(len, ptr_align, len_align, ret_addr);
+    return self.parent_allocator.rawAlloc(len, ptr_align, ret_addr);
 }
 
-fn resize(self: *Self, buf: []u8, buf_align: u29, new_len: usize, len_align: u29, ret_addr: usize) ?usize {
+fn resize(ctx: *anyopaque, buf: []u8, buf_align: u8, new_len: usize, ret_addr: usize) bool {
+    const self = @ptrCast(*Self, @alignCast(@alignOf(Self), ctx));
     assert(self.state == .init);
-    return self.parent_allocator.rawResize(buf, buf_align, new_len, len_align, ret_addr);
+    return self.parent_allocator.rawResize(buf, buf_align, new_len, ret_addr);
 }
 
-fn free(self: *Self, buf: []u8, buf_align: u29, ret_addr: usize) void {
+fn free(ctx: *anyopaque, buf: []u8, buf_align: u8, ret_addr: usize) void {
+    const self = @ptrCast(*Self, @alignCast(@alignOf(Self), ctx));
     assert(self.state == .init or self.state == .deinit);
     // Once you start freeing, you don't stop.
     self.state = .deinit;
