@@ -241,7 +241,7 @@ pub const IO = struct {
         fn complete(completion: *Completion) void {
             switch (completion.operation) {
                 .accept => {
-                    const result = blk: {
+                    const result: anyerror!os.socket_t = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {
@@ -271,7 +271,7 @@ pub const IO = struct {
                     completion.callback(completion.context, completion, &result);
                 },
                 .close => {
-                    const result = blk: {
+                    const result: anyerror!void = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {}, // A success, see https://github.com/ziglang/zig/issues/2425
@@ -289,7 +289,7 @@ pub const IO = struct {
                     completion.callback(completion.context, completion, &result);
                 },
                 .connect => {
-                    const result = blk: {
+                    const result: anyerror!void = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {
@@ -323,7 +323,7 @@ pub const IO = struct {
                     completion.callback(completion.context, completion, &result);
                 },
                 .read => {
-                    const result = blk: {
+                    const result: anyerror!usize = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {
@@ -353,7 +353,7 @@ pub const IO = struct {
                     completion.callback(completion.context, completion, &result);
                 },
                 .recv => {
-                    const result = blk: {
+                    const result: anyerror!usize = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {
@@ -381,7 +381,7 @@ pub const IO = struct {
                     completion.callback(completion.context, completion, &result);
                 },
                 .send => {
-                    const result = blk: {
+                    const result: anyerror!usize = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {
@@ -417,7 +417,7 @@ pub const IO = struct {
                 },
                 .timeout => {
                     assert(completion.result < 0);
-                    const result = switch (@intToEnum(os.E, -completion.result)) {
+                    const result: anyerror!void = switch (@intToEnum(os.E, -completion.result)) {
                         .INTR => {
                             completion.io.enqueue(completion);
                             return;
@@ -429,7 +429,7 @@ pub const IO = struct {
                     completion.callback(completion.context, completion, &result);
                 },
                 .write => {
-                    const result = blk: {
+                    const result: anyerror!usize = blk: {
                         if (completion.result < 0) {
                             const err = switch (@intToEnum(os.E, -completion.result)) {
                                 .INTR => {
