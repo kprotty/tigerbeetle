@@ -24,9 +24,9 @@ pub const Layout = struct {
 pub fn SetAssociativeCache(
     comptime Key: type,
     comptime Value: type,
-    comptime key_from_value: *const fn (*const Value) callconv(.Inline) Key,
-    comptime hash: *const fn (Key) callconv(.Inline) u64,
-    comptime equal: *const fn (Key, Key) callconv(.Inline) bool,
+    comptime key_from_value: *const fn (*const Value) Key,
+    comptime hash: *const fn (Key) u64,
+    comptime equal: *const fn (Key, Key) bool,
     comptime layout: Layout,
 ) type {
     assert(math.isPowerOfTwo(@sizeOf(Key)));
@@ -228,7 +228,7 @@ pub fn SetAssociativeCache(
         }
 
         /// If the key is present in the set, returns the way. Otherwise returns null.
-        inline fn search(self: *const Self, set: Set, key: Key) ?usize {
+        fn search(self: *const Self, set: Set, key: Key) ?usize {
             const ways = search_tags(set.tags, set.tag);
 
             var it = BitIterator(Ways){ .bits = ways };
@@ -245,7 +245,7 @@ pub fn SetAssociativeCache(
         /// Where each set bit represents the index of a way that has the same tag.
         const Ways = meta.Int(.unsigned, layout.ways);
 
-        inline fn search_tags(tags: *const [layout.ways]Tag, tag: Tag) Ways {
+        fn search_tags(tags: *const [layout.ways]Tag, tag: Tag) Ways {
             const x: Vector(layout.ways, Tag) = tags.*;
             const y: Vector(layout.ways, Tag) = @splat(layout.ways, tag);
 
@@ -340,7 +340,7 @@ pub fn SetAssociativeCache(
             }
         };
 
-        inline fn associate(self: *Self, key: Key) Set {
+        fn associate(self: *Self, key: Key) Set {
             const entropy = hash(key);
 
             const tag = @truncate(Tag, entropy >> math.log2_int(u64, self.sets));
@@ -510,13 +510,13 @@ test "SetAssociativeCache: eviction" {
     const Value = u64;
 
     const context = struct {
-        inline fn key_from_value(value: *const Value) Key {
+        fn key_from_value(value: *const Value) Key {
             return value.*;
         }
-        inline fn hash(key: Key) u64 {
+        fn hash(key: Key) u64 {
             return key;
         }
-        inline fn equal(a: Key, b: Key) bool {
+        fn equal(a: Key, b: Key) bool {
             return a == b;
         }
     };
@@ -529,15 +529,15 @@ test "SetAssociativeCache: hash collision" {
     const Value = u64;
 
     const context = struct {
-        inline fn key_from_value(value: *const Value) Key {
+        fn key_from_value(value: *const Value) Key {
             return value.*;
         }
         /// This hash function is intentionally broken to simulate hash collision.
-        inline fn hash(key: Key) u64 {
+        fn hash(key: Key) u64 {
             _ = key;
             return 0;
         }
-        inline fn equal(a: Key, b: Key) bool {
+        fn equal(a: Key, b: Key) bool {
             return a == b;
         }
     };
@@ -575,27 +575,27 @@ fn PackedUnsignedIntegerArray(comptime UInt: type) type {
         words: []Word,
 
         /// Returns the unsigned integer at `index`.
-        pub inline fn get(self: Self, index: u64) UInt {
+        pub fn get(self: Self, index: u64) UInt {
             // This truncate is safe since we want to mask the right-shifted word by exactly a UInt:
             return @truncate(UInt, self.word(index).* >> bits_index(index));
         }
 
         /// Sets the unsigned integer at `index` to `value`.
-        pub inline fn set(self: Self, index: u64, value: UInt) void {
+        pub fn set(self: Self, index: u64, value: UInt) void {
             const w = self.word(index);
             w.* &= ~mask(index);
             w.* |= @as(Word, value) << bits_index(index);
         }
 
-        inline fn mask(index: u64) Word {
+        fn mask(index: u64) Word {
             return @as(Word, math.maxInt(UInt)) << bits_index(index);
         }
 
-        inline fn word(self: Self, index: u64) *Word {
+        fn word(self: Self, index: u64) *Word {
             return &self.words[@divFloor(index, uints_per_word)];
         }
 
-        inline fn bits_index(index: u64) BitsIndex {
+        fn bits_index(index: u64) BitsIndex {
             // If uint_bits=2, then it's normal for the maximum return value value to be 62, even
             // where BitsIndex allows up to 63 (inclusive) for a 64-bit word. This is because 62 is
             // the bit index of the highest 2-bit UInt (e.g. bit index + bit length == 64).
@@ -731,7 +731,7 @@ fn BitIterator(comptime Bits: type) type {
 
         /// Iterates over the bits, consuming them.
         /// Returns the bit index of each set bit until there are no more set bits, then null.
-        inline fn next(it: *Self) ?BitIndex {
+        fn next(it: *Self) ?BitIndex {
             if (it.bits == 0) return null;
             // This @intCast() is safe since we never pass 0 to @ctz().
             const index = @intCast(BitIndex, @ctz(it.bits));
@@ -759,13 +759,13 @@ fn search_tags_test(comptime Key: type, comptime Value: type, comptime layout: L
     const log = false;
 
     const context = struct {
-        inline fn key_from_value(value: *const Value) Key {
+        fn key_from_value(value: *const Value) Key {
             return value.*;
         }
-        inline fn hash(key: Key) u64 {
+        fn hash(key: Key) u64 {
             return key;
         }
-        inline fn equal(a: Key, b: Key) bool {
+        fn equal(a: Key, b: Key) bool {
             return a == b;
         }
     };
@@ -780,7 +780,7 @@ fn search_tags_test(comptime Key: type, comptime Value: type, comptime layout: L
     );
 
     const reference = struct {
-        inline fn search_tags(tags: *[layout.ways]SAC.Tag, tag: SAC.Tag) SAC.Ways {
+        fn search_tags(tags: *[layout.ways]SAC.Tag, tag: SAC.Tag) SAC.Ways {
             var bits: SAC.Ways = 0;
             var count: usize = 0;
             for (tags) |t, i| {

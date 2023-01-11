@@ -9,8 +9,8 @@ pub fn KWayMergeIterator(
     comptime Context: type,
     comptime Key: type,
     comptime Value: type,
-    comptime key_from_value: *const fn (*const Value) callconv(.Inline) Key,
-    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
+    comptime key_from_value: *const fn (*const Value) Key,
+    comptime compare_keys: *const fn (Key, Key) math.Order,
     comptime k_max: u32,
     /// Peek the next key in the stream identified by stream_index.
     /// For example, peek(stream_index=2) returns user_streams[2][0].

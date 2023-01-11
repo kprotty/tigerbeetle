@@ -27,11 +27,11 @@ pub const BlockType = enum(u8) {
     filter = 3,
     data = 4,
 
-    pub inline fn from(vsr_operation: vsr.Operation) BlockType {
+    pub fn from(vsr_operation: vsr.Operation) BlockType {
         return @intToEnum(BlockType, @enumToInt(vsr_operation));
     }
 
-    pub inline fn operation(block_type: BlockType) vsr.Operation {
+    pub fn operation(block_type: BlockType) vsr.Operation {
         return @intToEnum(vsr.Operation, @enumToInt(block_type));
     }
 };
@@ -100,16 +100,16 @@ pub fn GridType(comptime Storage: type) type {
         };
 
         const cache_interface = struct {
-            inline fn address_from_address(address: *const u64) u64 {
+            fn address_from_address(address: *const u64) u64 {
                 return address.*;
             }
 
-            inline fn hash_address(address: u64) u64 {
+            fn hash_address(address: u64) u64 {
                 assert(address > 0);
                 return std.hash.Wyhash.hash(0, mem.asBytes(&address));
             }
 
-            inline fn equal_addresses(a: u64, b: u64) bool {
+            fn equal_addresses(a: u64, b: u64) bool {
                 return a == b;
             }
         };

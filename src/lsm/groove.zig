@@ -22,22 +22,22 @@ fn ObjectTreeHelpers(comptime Object: type) type {
     assert(std.meta.fieldInfo(Object, .timestamp).type == u64);
 
     return struct {
-        inline fn compare_keys(timestamp_a: u64, timestamp_b: u64) std.math.Order {
+        fn compare_keys(timestamp_a: u64, timestamp_b: u64) std.math.Order {
             return std.math.order(timestamp_a, timestamp_b);
         }
 
-        inline fn key_from_value(value: *const Object) u64 {
+        fn key_from_value(value: *const Object) u64 {
             return value.timestamp & ~@as(u64, tombstone_bit);
         }
 
         const sentinel_key = std.math.maxInt(u64);
         const tombstone_bit = 1 << (64 - 1);
 
-        inline fn tombstone(value: *const Object) bool {
+        fn tombstone(value: *const Object) bool {
             return (value.timestamp & tombstone_bit) != 0;
         }
 
-        inline fn tombstone_from_key(timestamp: u64) Object {
+        fn tombstone_from_key(timestamp: u64) Object {
             var value = std.mem.zeroes(Object); // Full zero-initialized Value.
             value.timestamp = timestamp | tombstone_bit;
             return value;
@@ -56,22 +56,22 @@ const IdTreeValue = extern struct {
         assert(@bitSizeOf(IdTreeValue) == 32 * 8);
     }
 
-    inline fn compare_keys(a: u128, b: u128) std.math.Order {
+    fn compare_keys(a: u128, b: u128) std.math.Order {
         return std.math.order(a, b);
     }
 
-    inline fn key_from_value(value: *const IdTreeValue) u128 {
+    fn key_from_value(value: *const IdTreeValue) u128 {
         return value.id;
     }
 
     const sentinel_key = std.math.maxInt(u128);
     const tombstone_bit = 1 << (64 - 1);
 
-    inline fn tombstone(value: *const IdTreeValue) bool {
+    fn tombstone(value: *const IdTreeValue) bool {
         return (value.timestamp & tombstone_bit) != 0;
     }
 
-    inline fn tombstone_from_key(id: u128) IdTreeValue {
+    fn tombstone_from_key(id: u128) IdTreeValue {
         return .{
             .id = id,
             .timestamp = tombstone_bit,

@@ -70,16 +70,16 @@ pub fn TableType(
     comptime TableKey: type,
     comptime TableValue: type,
     /// Returns the sort order between two keys.
-    comptime table_compare_keys: *const fn (TableKey, TableKey) callconv(.Inline) math.Order,
+    comptime table_compare_keys: *const fn (TableKey, TableKey) math.Order,
     /// Returns the key for a value. For example, given `object` returns `object.id`.
     /// Since most objects contain an id, this avoids duplicating the key when storing the value.
-    comptime table_key_from_value: *const fn (*const TableValue) callconv(.Inline) TableKey,
+    comptime table_key_from_value: *const fn (*const TableValue) TableKey,
     /// Must compare greater than all other keys.
     comptime table_sentinel_key: TableKey,
     /// Returns whether a value is a tombstone value.
-    comptime table_tombstone: *const fn (*const TableValue) callconv(.Inline) bool,
+    comptime table_tombstone: *const fn (*const TableValue) bool,
     /// Returns a tombstone value representation for a key.
-    comptime table_tombstone_from_key: *const fn (TableKey) callconv(.Inline) TableValue,
+    comptime table_tombstone_from_key: *const fn (TableKey) TableValue,
     comptime table_usage: TableUsage,
 ) type {
     return struct {

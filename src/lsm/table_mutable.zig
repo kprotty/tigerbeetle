@@ -28,12 +28,12 @@ pub fn TableMutableType(comptime Table: type) type {
             Value,
             Table.key_from_value,
             struct {
-                inline fn hash(key: Key) u64 {
+                fn hash(key: Key) u64 {
                     return std.hash.Wyhash.hash(0, mem.asBytes(&key));
                 }
             }.hash,
             struct {
-                inline fn equal(a: Key, b: Key) bool {
+                fn equal(a: Key, b: Key) bool {
                     return compare_keys(a, b) == .eq;
                 }
             }.equal,

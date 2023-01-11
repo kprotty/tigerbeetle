@@ -37,21 +37,21 @@ pub fn PostedGrooveType(comptime Storage: type) type {
                 assert(@bitSizeOf(Value) == 32 * 8);
             }
 
-            inline fn compare_keys(a: u128, b: u128) math.Order {
+            fn compare_keys(a: u128, b: u128) math.Order {
                 return math.order(a, b);
             }
 
-            inline fn key_from_value(value: *const Value) u128 {
+            fn key_from_value(value: *const Value) u128 {
                 return value.id;
             }
 
             const sentinel_key = math.maxInt(u128);
 
-            inline fn tombstone(value: *const Value) bool {
+            fn tombstone(value: *const Value) bool {
                 return value.data == .tombstone;
             }
 
-            inline fn tombstone_from_key(id: u128) Value {
+            fn tombstone_from_key(id: u128) Value {
                 return .{
                     .id = id,
                     .data = .tombstone,

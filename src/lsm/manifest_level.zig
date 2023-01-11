@@ -16,7 +16,7 @@ pub fn ManifestLevelType(
     comptime NodePool: type,
     comptime Key: type,
     comptime TableInfo: type,
-    comptime compare_keys: *const fn (Key, Key) callconv(.Inline) math.Order,
+    comptime compare_keys: *const fn (Key, Key) math.Order,
     comptime table_count_max: u32,
 ) type {
     return struct {
@@ -28,7 +28,7 @@ pub fn ManifestLevelType(
             table_count_max,
             Key,
             struct {
-                inline fn key_from_value(value: *const Key) Key {
+                fn key_from_value(value: *const Key) Key {
                     return value.*;
                 }
             }.key_from_value,
