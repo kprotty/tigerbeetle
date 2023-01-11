@@ -151,9 +151,9 @@ pub fn main() !void {
 
     const result: i64 = @divFloor(@intCast(i64, transfers.len * 1000), ms);
     try stdout.print("============================================\n", .{});
-    try stdout.print("{} batches in {} ms\n", .{ batches_count, ms });
-    try stdout.print("{} transfers per second\n", .{result});
-    try stdout.print("max p100 latency per {} transfers = {}ms\n", .{
+    try stdout.print("{?} batches in {?} ms\n", .{ batches_count, ms });
+    try stdout.print("{?} transfers per second\n", .{result});
+    try stdout.print("max p100 latency per {?} transfers = {?}ms\n", .{
         transfers_per_batch,
         queue.transfers_latency_max,
     });
@@ -249,7 +249,7 @@ const TimedQueue = struct {
         assert(completed_batch != null);
         assert(completed_batch.?.operation == operation);
 
-        log.debug("completed batch operation={} start={}", .{
+        log.debug("completed batch operation={?} start={?}", .{
             completed_batch.?.operation,
             self.batch_start,
         });
